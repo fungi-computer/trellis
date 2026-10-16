@@ -1,0 +1,24 @@
+.wf-portable-share {
+  display: grid;
+  gap: var(--spacing-md);
+  overflow: auto;
+}
+.wf-portable-share section {
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+.wf-portable-share pre,
+.wf-portable-share code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wf-portable-share ul {
+  padding-inline-start: var(--spacing-lg);
+}
+
+@media (max-width: 720px) {
+  .wf-topbar-workflow {
+    flex-basis: 100%;
+  }
+}

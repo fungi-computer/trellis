@@ -1,0 +1,533 @@
+{
+  "id": "bonsai-checks",
+  "definition": {
+    "format": "fungi.workflow/v1",
+    "title": "Bonsai checks",
+    "description": "Clone the Change’s exact head on your Computer with a read-only Git pass for the Change’s repository, run npm test, and report tests passed or failed on the Change. Edit the trigger’s test command for your repository.",
+    "apps": {
+      "bonsai": {
+        "appId": "app_bonsai"
+      },
+      "shed": {
+        "appId": "app_shed"
+      }
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "payload": {},
+        "testCommand": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": ["payload", "testCommand"],
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "change",
+        "kind": "code",
+        "input": {
+          "type": "object",
+          "properties": {
+            "payload": {},
+            "testCommand": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": ["payload", "testCommand"],
+          "additionalProperties": false
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,128}$"
+            },
+            "number": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "head": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "testCommand": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": ["repo", "number", "head", "attemptId", "testCommand"],
+          "additionalProperties": false
+        },
+        "source": "const {payload, testCommand} = await env.INPUT.read({});\nconst {repo, number, head} = payload.data.change;\nreturn {repo, number, head, attemptId: payload.data.eventId, testCommand};\n",
+        "values": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "testCommand": {
+            "from": {
+              "node": "$input",
+              "port": "testCommand"
+            }
+          }
+        }
+      },
+      {
+        "id": "running",
+        "kind": "app",
+        "app": "bonsai",
+        "method": "checks.report",
+        "methodDigest": "sha256:d9955fde688998be9ab0351216883fc9d80a40a3cd91d5587525303897c4713e",
+        "values": {
+          "repo": {
+            "from": {
+              "node": "change",
+              "port": "repo"
+            }
+          },
+          "number": {
+            "from": {
+              "node": "change",
+              "port": "number"
+            }
+          },
+          "head": {
+            "from": {
+              "node": "change",
+              "port": "head"
+            }
+          },
+          "attemptId": {
+            "from": {
+              "node": "change",
+              "port": "attemptId"
+            }
+          },
+          "name": {
+            "literal": "tests"
+          },
+          "status": {
+            "literal": "running"
+          }
+        }
+      },
+      {
+        "id": "command",
+        "kind": "code",
+        "input": {
+          "type": "object",
+          "properties": {
+            "head": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "testCommand": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "report": {}
+          },
+          "required": ["head", "testCommand", "report"],
+          "additionalProperties": false
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16384
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        },
+        "source": "const input = await env.INPUT.read({});\nif (input.report.kind !== \"recorded\") throw new Error(\"Check attempt is no longer current\");\nconst quote = value => \"'\" + value.replaceAll(\"'\", \"'\\\"'\\\"'\") + \"'\";\nreturn { command: [\n  \"set -eu\",\n  \"work=$(mktemp -d)\",\n  `trap 'rm -rf \"$work\"' EXIT HUP INT TERM`,\n  'git clone --no-checkout -- \"$FUNGI_GIT_REMOTE\" \"$work/repo\"',\n  'git -C \"$work/repo\" fetch origin ' + quote(input.head),\n  'git -C \"$work/repo\" checkout --detach ' + quote(input.head),\n  'cd \"$work/repo\"',\n  input.testCommand\n].join(\"\\n\") };\n",
+        "values": {
+          "head": {
+            "from": {
+              "node": "change",
+              "port": "head"
+            }
+          },
+          "testCommand": {
+            "from": {
+              "node": "change",
+              "port": "testCommand"
+            }
+          },
+          "report": {
+            "from": {
+              "node": "running",
+              "port": "value"
+            }
+          }
+        }
+      },
+      {
+        "id": "tests",
+        "kind": "app",
+        "app": "shed",
+        "method": "runCommand",
+        "methodDigest": "sha256:cfa2e8beeacd440ccc745525898d6b831049a831a2b9e479dd3506f06c42c457",
+        "values": {
+          "command": {
+            "from": {
+              "node": "command",
+              "port": "command"
+            }
+          },
+          "timeoutMs": {
+            "literal": 45000
+          }
+        },
+        "gitAccess": {
+          "binding": "bonsai",
+          "repository": "$trigger.repository",
+          "access": "read"
+        }
+      },
+      {
+        "id": "result",
+        "kind": "code",
+        "source": "const result = await env.INPUT.read({});\nconst output = \"output\" in result ? result.output : null;\nconst passed = result.status === \"succeeded\" && output !== null && output.status === \"completed\" && output.exitCode === 0;\nconst summary = output === null ? JSON.stringify(result) : [output.stdout, output.stderr, output.truncated ? \"[output truncated]\" : \"\"].filter(Boolean).join(\"\\n\");\nreturn { status: passed ? \"passed\" : \"failed\", summary: summary.slice(-4000) };\n",
+        "input": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "accepted",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "unknown",
+                    "expired"
+                  ]
+                },
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["completed", "failed", "cancelled"]
+                        },
+                        "exitCode": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "stdout": {
+                          "type": "string",
+                          "maxLength": 65538
+                        },
+                        "stderr": {
+                          "type": "string",
+                          "maxLength": 65538
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "exitCode",
+                        "stdout",
+                        "stderr",
+                        "truncated"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": ["requestId", "status", "output"],
+              "additionalProperties": false
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_granted",
+                        "revoked",
+                        "grantor_lost_authority",
+                        "unavailable",
+                        "invalid",
+                        "invalid_path",
+                        "too_large",
+                        "conflict",
+                        "not_found"
+                      ]
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "attachment_budget_exceeded"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": ["exec", "write"]
+                    },
+                    "retryAfterMs": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": ["error", "kind", "retryAfterMs"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "timeout"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": ["error", "requestId"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["passed", "failed"]
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": ["status", "summary"],
+          "additionalProperties": false
+        },
+        "values": {
+          "value": {
+            "coalesce": [
+              {
+                "from": {
+                  "node": "tests",
+                  "port": "ok"
+                }
+              },
+              {
+                "from": {
+                  "node": "tests",
+                  "port": "refused"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "reported",
+        "kind": "app",
+        "app": "bonsai",
+        "method": "checks.report",
+        "methodDigest": "sha256:d9955fde688998be9ab0351216883fc9d80a40a3cd91d5587525303897c4713e",
+        "values": {
+          "repo": {
+            "from": {
+              "node": "change",
+              "port": "repo"
+            }
+          },
+          "number": {
+            "from": {
+              "node": "change",
+              "port": "number"
+            }
+          },
+          "head": {
+            "from": {
+              "node": "change",
+              "port": "head"
+            }
+          },
+          "attemptId": {
+            "from": {
+              "node": "change",
+              "port": "attemptId"
+            }
+          },
+          "name": {
+            "literal": "tests"
+          },
+          "status": {
+            "from": {
+              "node": "result",
+              "port": "status"
+            }
+          },
+          "summary": {
+            "from": {
+              "node": "result",
+              "port": "summary"
+            }
+          }
+        }
+      }
+    ],
+    "edges": [],
+    "output": {
+      "report": {
+        "node": "reported",
+        "port": "value"
+      }
+    },
+    "triggers": [
+      {
+        "id": "opened",
+        "on": "event",
+        "app": "bonsai",
+        "event": "change.opened",
+        "eventDigest": "sha256:4891b4e8b6254f25e52261e086ba60fa0f64481dd51994bb45d367e1fba825ed",
+        "input": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "testCommand": {
+            "literal": "npm test"
+          }
+        },
+        "repository": {
+          "from": {
+            "node": "$input",
+            "port": "payload"
+          },
+          "path": "/data/repository/name"
+        }
+      },
+      {
+        "id": "updated",
+        "on": "event",
+        "app": "bonsai",
+        "event": "change.updated",
+        "eventDigest": "sha256:b2ef079c0d54b2faab3ce438119b751aaf4d31da51be4049ce9a08978830c876",
+        "input": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "testCommand": {
+            "literal": "npm test"
+          }
+        },
+        "repository": {
+          "from": {
+            "node": "$input",
+            "port": "payload"
+          },
+          "path": "/data/repository/name"
+        }
+      },
+      {
+        "id": "checks-requested",
+        "on": "event",
+        "app": "bonsai",
+        "event": "change.checks_requested",
+        "eventDigest": "sha256:7447e489a695b87dda43836a174e0c4a1463c32971fd7e36c1011f06f27d20ee",
+        "input": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "testCommand": {
+            "literal": "npm test"
+          }
+        },
+        "repository": {
+          "from": {
+            "node": "$input",
+            "port": "payload"
+          },
+          "path": "/data/repository/name"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "change": {
+      "x": 40,
+      "y": 100
+    },
+    "running": {
+      "x": 340,
+      "y": 100
+    },
+    "command": {
+      "x": 640,
+      "y": 100
+    },
+    "tests": {
+      "x": 940,
+      "y": 100
+    },
+    "result": {
+      "x": 1240,
+      "y": 100
+    },
+    "reported": {
+      "x": 1540,
+      "y": 100
+    }
+  }
+}

@@ -1,0 +1,18 @@
+/* React Flow canvas primitives inherit all surface and status colors from Caps. */
+.react-flow {
+  --xy-node-background-color: transparent;
+  --xy-node-border: 0;
+  --xy-node-boxshadow-default: none;
+  --xy-node-color: var(--color-base-content);
+  --xy-edge-stroke: var(--color-primary);
+  --xy-edge-stroke-width: 2;
+  --xy-controls-button-background-color: var(--color-base-100);
+  --xy-controls-button-color: var(--color-base-content);
+  --xy-controls-button-background-color-hover: var(--color-base-200);
+  --xy-background-color: transparent;
+  --xy-background-pattern-color: color-mix(
+    in oklab,
+    var(--color-base-content) 18%,
+    transparent
+  );
+}

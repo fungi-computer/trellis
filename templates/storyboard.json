@@ -1,0 +1,831 @@
+{
+  "id": "storyboard",
+  "definition": {
+    "format": "fungi.workflow/v1",
+    "title": "Storyboard",
+    "description": "Supply up to twelve beats and optional canon image references for this run. Review each panel with feedback for up to three attempts, optionally animate it, and collect a Markdown contact sheet. Panels and clips stay in Prints. Generation uses Team credit.",
+    "apps": {
+      "prints": {
+        "appId": "app_prints",
+        "role": "media"
+      }
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "beats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 12
+        },
+        "aspect": {
+          "type": "string",
+          "enum": ["16:9", "9:16", "1:1"],
+          "default": "16:9"
+        },
+        "style": {
+          "type": "object",
+          "properties": {
+            "notes": {
+              "type": "string",
+              "maxLength": 400,
+              "description": "Visual style shared by every beat."
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "format": "fungi:file",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Canon reference image on the admitted Computer."
+                  }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+              },
+              "maxItems": 4
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["beats"],
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "beatInputs",
+        "kind": "transform",
+        "fields": {
+          "items": {
+            "each": {
+              "over": {
+                "from": {
+                  "node": "$input",
+                  "port": "beats"
+                }
+              },
+              "maxItems": 12,
+              "body": {
+                "object": {
+                  "beat": {
+                    "from": {
+                      "node": "$item",
+                      "port": "value"
+                    }
+                  },
+                  "style": {
+                    "coalesce": [
+                      {
+                        "from": {
+                          "node": "$input",
+                          "port": "style"
+                        }
+                      },
+                      {
+                        "literal": {}
+                      }
+                    ]
+                  },
+                  "aspect": {
+                    "coalesce": [
+                      {
+                        "from": {
+                          "node": "$input",
+                          "port": "aspect"
+                        }
+                      },
+                      {
+                        "literal": "16:9"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "beats",
+        "kind": "map",
+        "over": {
+          "node": "beatInputs",
+          "port": "items"
+        },
+        "body": "beat",
+        "concurrency": 1,
+        "maxItems": 12
+      },
+      {
+        "id": "contactSheet",
+        "kind": "code",
+        "source": "const { shots } = await env.INPUT.read({});\nconst rows = shots.map((shot, index) => {\n  const title = shot.beat.replace(/[\\r\\n]+/g, \" \");\n  const panel = shot.panel?.destination?.path;\n  const clip = shot.clip?.destination?.path;\n  const lines = [\"## \" + (index + 1) + \". \" + title, \"Decision: \" + shot.choice];\n  if (panel) lines.push(\"![Panel](\" + panel + \")\", \"Prints panel: `\" + panel + \"`\");\n  if (clip) lines.push(\"Prints clip: `\" + clip + \"`\");\n  if (shot.note) lines.push(\"Review note: \" + shot.note);\n  if (shot.refusal) lines.push(\"Generation refusal: \" + JSON.stringify(shot.refusal));\n  return lines.join(\"\\n\\n\");\n});\nreturn \"# Storyboard contact sheet and shot list\\n\\n\" + rows.join(\"\\n\\n\");",
+        "input": {
+          "type": "object",
+          "properties": {
+            "shots": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "required": ["shots"],
+          "additionalProperties": false,
+          "title": "Contact sheet",
+          "description": "Collect panel and clip paths into a Markdown contact sheet and shot list."
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "values": {
+          "shots": {
+            "from": {
+              "node": "beats",
+              "port": "items"
+            }
+          }
+        }
+      }
+    ],
+    "edges": [],
+    "output": {
+      "shots": {
+        "node": "beats",
+        "port": "items"
+      },
+      "contactSheet": {
+        "node": "contactSheet",
+        "port": "value"
+      }
+    },
+    "subgraphs": {
+      "beat": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "object",
+              "properties": {
+                "beat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "style": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "string",
+                      "maxLength": 400,
+                      "description": "Visual style shared by every beat."
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "format": "fungi:file",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Canon reference image on the admitted Computer."
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 4
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["beat", "style", "aspect"],
+              "additionalProperties": false
+            },
+            "index": {
+              "type": "integer"
+            }
+          },
+          "required": ["item", "index"],
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "revise",
+            "kind": "repeat",
+            "body": "attempt",
+            "maxRounds": 3,
+            "until": {
+              "op": "neq",
+              "left": {
+                "from": {
+                  "node": "$input",
+                  "port": "choice"
+                }
+              },
+              "right": {
+                "literal": "redo"
+              }
+            }
+          },
+          {
+            "id": "selection",
+            "kind": "code",
+            "source": "const { result } = await env.INPUT.read({});\nreturn { choice: result.choice ?? \"failed\", panel: result.panel ?? null, note: result.note ?? \"\", refusal: result.refusal ?? null };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "type": "object"
+                }
+              },
+              "required": ["result"],
+              "additionalProperties": false,
+              "title": "Review decision",
+              "description": "Keep the review decision and panel for the next steps."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "choice": {
+                  "type": "string",
+                  "enum": ["keep", "animate", "redo", "reject", "failed"]
+                },
+                "panel": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "refusal": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": ["choice", "panel", "note", "refusal"],
+              "additionalProperties": false
+            },
+            "values": {
+              "result": {
+                "coalesce": [
+                  {
+                    "from": {
+                      "node": "revise",
+                      "port": "result"
+                    }
+                  },
+                  {
+                    "from": {
+                      "node": "revise",
+                      "port": "exhausted"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "animate",
+            "kind": "condition",
+            "test": {
+              "op": "eq",
+              "left": {
+                "from": {
+                  "node": "selection",
+                  "port": "choice"
+                }
+              },
+              "right": {
+                "literal": "animate"
+              }
+            }
+          },
+          {
+            "id": "animation",
+            "kind": "code",
+            "source": "const { panel, item } = await env.INPUT.read({});\nif (!panel?.destination?.path) throw new Error(\"An approved panel is required for animation.\");\nreturn { path: panel.destination.path, prompt: \"Animate this approved storyboard panel: \" + item.beat, aspect: item.aspect };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "panel": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "item": {
+                  "type": "object",
+                  "properties": {
+                    "beat": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 400,
+                          "description": "Visual style shared by every beat."
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string",
+                                "format": "fungi:file",
+                                "minLength": 1,
+                                "maxLength": 4096,
+                                "description": "Canon reference image on the admitted Computer."
+                              }
+                            },
+                            "required": ["path"],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 4
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "enum": ["16:9", "9:16", "1:1"]
+                    }
+                  },
+                  "required": ["beat", "style", "aspect"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["panel", "item"],
+              "additionalProperties": false,
+              "title": "Prepare animation",
+              "description": "Use the approved panel as the first frame of an animated clip."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 4096
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["path", "prompt", "aspect"],
+              "additionalProperties": false
+            },
+            "values": {
+              "panel": {
+                "from": {
+                  "node": "selection",
+                  "port": "panel"
+                }
+              },
+              "item": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                }
+              }
+            }
+          },
+          {
+            "id": "clip",
+            "kind": "app",
+            "app": "prints",
+            "method": "generateVideo",
+            "methodDigest": "sha256:a5d57053d0fa1e28459c8c6dafd914dbe14c0040295d1713dd33c64efb681fec",
+            "values": {
+              "settings": {
+                "object": {
+                  "model": {
+                    "literal": "bytedance/seedance-2.0"
+                  },
+                  "prompt": {
+                    "from": {
+                      "node": "animation",
+                      "port": "prompt"
+                    }
+                  },
+                  "resolution": {
+                    "literal": "720p"
+                  },
+                  "aspectRatio": {
+                    "from": {
+                      "node": "animation",
+                      "port": "aspect"
+                    }
+                  },
+                  "durationSeconds": {
+                    "literal": 5
+                  },
+                  "references": {
+                    "array": [
+                      {
+                        "object": {
+                          "path": {
+                            "from": {
+                              "node": "animation",
+                              "port": "path"
+                            }
+                          },
+                          "role": {
+                            "literal": "first-frame"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "shot",
+            "kind": "transform",
+            "fields": {
+              "beat": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                },
+                "path": "/beat"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": {
+              "node": "animate",
+              "port": "true"
+            },
+            "to": {
+              "node": "animation",
+              "port": "after"
+            }
+          }
+        ],
+        "output": {
+          "beat": {
+            "node": "shot",
+            "port": "beat"
+          },
+          "choice": {
+            "node": "selection",
+            "port": "choice"
+          },
+          "panel": {
+            "node": "selection",
+            "port": "panel"
+          },
+          "note": {
+            "node": "selection",
+            "port": "note"
+          },
+          "refusal": {
+            "node": "selection",
+            "port": "refusal"
+          },
+          "clip": {
+            "node": "clip",
+            "port": "ok"
+          }
+        }
+      },
+      "attempt": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "object",
+              "properties": {
+                "beat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "style": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "string",
+                      "maxLength": 400,
+                      "description": "Visual style shared by every beat."
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "format": "fungi:file",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Canon reference image on the admitted Computer."
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 4
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["beat", "style", "aspect"],
+              "additionalProperties": false
+            },
+            "round": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "previous": {
+              "type": "object"
+            }
+          },
+          "required": ["item", "round", "previous"],
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "generation",
+            "kind": "code",
+            "source": "const { item, previous } = await env.INPUT.read({});\nconst [width, height] = item.aspect === \"9:16\" ? [864, 1536] : item.aspect === \"1:1\" ? [1024, 1024] : [1536, 864];\nreturn { prompt: [item.beat, item.style.notes ?? \"\", previous.note ?? \"\"].filter(Boolean).join(\"\\n\"), width, height, references: item.style.references ?? [] };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "item": {
+                  "type": "object",
+                  "properties": {
+                    "beat": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 400,
+                          "description": "Visual style shared by every beat."
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string",
+                                "format": "fungi:file",
+                                "minLength": 1,
+                                "maxLength": 4096,
+                                "description": "Canon reference image on the admitted Computer."
+                              }
+                            },
+                            "required": ["path"],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 4
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "enum": ["16:9", "9:16", "1:1"]
+                    }
+                  },
+                  "required": ["beat", "style", "aspect"],
+                  "additionalProperties": false
+                },
+                "previous": {
+                  "type": "object"
+                }
+              },
+              "required": ["item", "previous"],
+              "additionalProperties": false,
+              "title": "Prepare generation",
+              "description": "Combine the beat, visual style and prior review feedback for Prints."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1920
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1920
+                },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      }
+                    },
+                    "required": ["path"],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 4
+                }
+              },
+              "required": ["prompt", "width", "height", "references"],
+              "additionalProperties": false
+            },
+            "values": {
+              "item": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                }
+              },
+              "previous": {
+                "from": {
+                  "node": "$input",
+                  "port": "previous"
+                }
+              }
+            }
+          },
+          {
+            "id": "panel",
+            "kind": "app",
+            "app": "prints",
+            "method": "generateImage",
+            "methodDigest": "sha256:fb7914d340280ca34edcaa4eb37f9492f32fa15c2f6d3d82e992c792a54a1874",
+            "values": {
+              "settings": {
+                "object": {
+                  "model": {
+                    "literal": "@cf/black-forest-labs/flux-2-klein-4b"
+                  },
+                  "prompt": {
+                    "from": {
+                      "node": "generation",
+                      "port": "prompt"
+                    }
+                  },
+                  "width": {
+                    "from": {
+                      "node": "generation",
+                      "port": "width"
+                    }
+                  },
+                  "height": {
+                    "from": {
+                      "node": "generation",
+                      "port": "height"
+                    }
+                  },
+                  "references": {
+                    "from": {
+                      "node": "generation",
+                      "port": "references"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "look",
+            "kind": "review",
+            "title": "Keep this panel?",
+            "show": [
+              {
+                "node": "panel",
+                "port": "ok"
+              }
+            ],
+            "reviewers": "runner",
+            "timeout": 86400000,
+            "choices": [
+              {
+                "id": "keep",
+                "label": "Keep"
+              },
+              {
+                "id": "animate",
+                "label": "Keep and animate"
+              },
+              {
+                "id": "redo",
+                "label": "Regenerate"
+              },
+              {
+                "id": "reject",
+                "label": "Reject"
+              }
+            ]
+          }
+        ],
+        "edges": [],
+        "output": {
+          "panel": {
+            "node": "panel",
+            "port": "ok"
+          },
+          "choice": {
+            "node": "look",
+            "port": "choice"
+          },
+          "note": {
+            "node": "look",
+            "port": "note"
+          },
+          "refusal": {
+            "node": "panel",
+            "port": "refused"
+          }
+        }
+      }
+    }
+  },
+  "layout": {
+    "$input": {
+      "x": 20,
+      "y": 40
+    },
+    "beatInputs": {
+      "x": 330,
+      "y": 40
+    },
+    "beats": {
+      "x": 650,
+      "y": 40
+    },
+    "contactSheet": {
+      "x": 1010,
+      "y": 40
+    }
+  }
+}

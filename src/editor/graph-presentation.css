@@ -1,0 +1,69 @@
+.wf-node-purpose {
+  margin: 0;
+  padding: 0.35rem var(--spacing-sm);
+  color: var(--wf-muted);
+  font-family: var(--font-sans);
+  font-size: max(12px, var(--text-xs));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wf-body {
+  border-top: 1px solid var(--wf-line);
+  padding: var(--spacing-xs);
+  font-family: var(--font-sans);
+}
+.wf-body h3,
+.wf-body h4,
+.wf-body p {
+  margin: 0;
+}
+.wf-body h3 {
+  padding: 0.2rem 0.3rem 0.4rem;
+  font-size: var(--text-xs);
+  color: var(--wf-muted);
+}
+.wf-body ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--spacing-xs);
+}
+.wf-body-step {
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border-inline-start: 2px solid var(--wf-line);
+  background: var(--color-base-200);
+}
+.wf-body-step h4 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.wf-body-step .wf-node-purpose {
+  padding: 0.15rem 0;
+}
+.wf-body-edge {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--wf-muted);
+  font-size: max(12px, var(--text-xs));
+  min-width: 0;
+}
+.wf-body-edge span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wf-graph-result {
+  padding: var(--spacing-xs);
+  border-top: 1px solid var(--wf-line);
+}
+.wf-graph-result > header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--wf-muted);
+  font-size: max(12px, var(--text-xs));
+}

@@ -1,0 +1,402 @@
+{
+  "id": "bonsai-build-on-merge",
+  "definition": {
+    "format": "fungi.workflow/v1",
+    "title": "Build on merge",
+    "description": "When a Change merges into your App's source repository, build that exact merged commit on your Computer, then install the Release on your App. With Review before install on, the run waits for you to approve the build first; off, a passing build installs automatically. A failed build never installs. Set the trigger's repository filter, App, installation and Review before install for your App.",
+    "apps": {
+      "bonsai": {
+        "appId": "app_bonsai"
+      }
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "payload": {},
+        "appId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "installationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[a-zA-Z0-9_-]{1,256}$"
+        },
+        "reviewBeforeInstall": {
+          "type": "boolean"
+        }
+      },
+      "required": ["payload", "appId", "installationId", "reviewBeforeInstall"],
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "merged",
+        "kind": "code",
+        "input": {
+          "type": "object",
+          "properties": {
+            "payload": {},
+            "appId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": ["payload", "appId"],
+          "additionalProperties": false
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "appId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "sourceRevision": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 44,
+              "pattern": "^git:[0-9a-f]{40}$"
+            }
+          },
+          "required": ["appId", "sourceRevision"],
+          "additionalProperties": false
+        },
+        "source": "const {payload, appId} = await env.INPUT.read({});\nconst merge = payload.data.activity;\nif (payload.type !== \"change.merged\" || merge.type !== \"merge\") throw new Error(\"Build on merge starts only from a merged Change\");\nreturn {appId, sourceRevision: \"git:\" + merge.data.after};\n",
+        "values": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "appId": {
+            "from": {
+              "node": "$input",
+              "port": "appId"
+            }
+          }
+        }
+      },
+      {
+        "id": "build",
+        "kind": "app",
+        "app": "bonsai",
+        "method": "apps.build",
+        "methodDigest": "sha256:e8adf94f10e3eeec30f814ef27f2fb6994344b2277139786b0aa843da504eb01",
+        "values": {
+          "appId": {
+            "from": {
+              "node": "merged",
+              "port": "appId"
+            }
+          },
+          "sourceRevision": {
+            "from": {
+              "node": "merged",
+              "port": "sourceRevision"
+            }
+          }
+        }
+      },
+      {
+        "id": "build-status",
+        "kind": "app",
+        "app": "bonsai",
+        "method": "apps.buildStatus",
+        "methodDigest": "sha256:5c567839c3fbb8fa46990cc48d247549a0222ff4fde7fad07c28322990abab59",
+        "values": {
+          "jobId": {
+            "from": {
+              "node": "build",
+              "port": "jobId"
+            }
+          }
+        }
+      },
+      {
+        "id": "built",
+        "kind": "code",
+        "input": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["running", "succeeded", "failed", "revoked"]
+            },
+            "detail": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "release": {},
+            "sourceRevision": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 44,
+              "pattern": "^git:[0-9a-f]{40}$"
+            }
+          },
+          "required": ["status", "detail", "release", "sourceRevision"],
+          "additionalProperties": false
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "release": {},
+            "summary": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": ["release", "summary"],
+          "additionalProperties": false
+        },
+        "source": "const {status, detail, release, sourceRevision} = await env.INPUT.read({});\nif (status !== \"succeeded\") throw new Error(\"The build did not pass\" + (detail ? \": \" + detail.slice(-2000) : \"\"));\nif (release === null || typeof release !== \"object\" || release.artifact?.provenance?.sourceRevision !== sourceRevision) throw new Error(\"The build's Release is not the merged commit\");\nreturn {release, summary: \"Built \" + release.releaseId + \" of \" + release.appId + \" from \" + sourceRevision};\n",
+        "values": {
+          "status": {
+            "from": {
+              "node": "build-status",
+              "port": "status"
+            }
+          },
+          "detail": {
+            "from": {
+              "node": "build-status",
+              "port": "detail"
+            }
+          },
+          "release": {
+            "from": {
+              "node": "build-status",
+              "port": "release"
+            }
+          },
+          "sourceRevision": {
+            "from": {
+              "node": "merged",
+              "port": "sourceRevision"
+            }
+          }
+        }
+      },
+      {
+        "id": "review-gate",
+        "kind": "condition",
+        "test": {
+          "op": "eq",
+          "left": {
+            "from": {
+              "node": "$input",
+              "port": "reviewBeforeInstall"
+            }
+          },
+          "right": {
+            "literal": true
+          }
+        }
+      },
+      {
+        "id": "to-review",
+        "kind": "transform",
+        "fields": {
+          "summary": {
+            "from": {
+              "node": "built",
+              "port": "summary"
+            }
+          },
+          "release": {
+            "from": {
+              "node": "built",
+              "port": "release"
+            }
+          },
+          "review": {
+            "from": {
+              "node": "review-gate",
+              "port": "true"
+            }
+          }
+        }
+      },
+      {
+        "id": "review",
+        "kind": "review",
+        "title": "Install this build?",
+        "show": [
+          {
+            "node": "to-review",
+            "port": "release"
+          },
+          {
+            "node": "to-review",
+            "port": "summary"
+          }
+        ],
+        "reviewers": "runner",
+        "timeout": 604800000
+      },
+      {
+        "id": "automatic",
+        "kind": "transform",
+        "fields": {
+          "release": {
+            "from": {
+              "node": "built",
+              "port": "release"
+            }
+          },
+          "automatic": {
+            "from": {
+              "node": "review-gate",
+              "port": "false"
+            }
+          }
+        }
+      },
+      {
+        "id": "install",
+        "kind": "app",
+        "app": "bonsai",
+        "method": "apps.install",
+        "methodDigest": "sha256:3a86e79bf9cc44e38842fb57bb895184cd8e03209bce045a8496a7cdd9580dcf",
+        "values": {
+          "installationId": {
+            "from": {
+              "node": "$input",
+              "port": "installationId"
+            }
+          },
+          "release": {
+            "coalesce": [
+              {
+                "from": {
+                  "node": "review",
+                  "port": "approved"
+                }
+              },
+              {
+                "from": {
+                  "node": "automatic",
+                  "port": "release"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "edges": [],
+    "output": {
+      "installation": {
+        "node": "install",
+        "port": "value"
+      }
+    },
+    "triggers": [
+      {
+        "id": "merged",
+        "on": "event",
+        "app": "bonsai",
+        "event": "change.merged",
+        "eventDigest": "sha256:6b720bbe271704de34e3c8819edee92cf5d07a7b924dc4c3df2eb97c9aa7bfaa",
+        "when": {
+          "op": "and",
+          "tests": [
+            {
+              "op": "eq",
+              "left": {
+                "from": {
+                  "node": "$input",
+                  "port": "payload"
+                },
+                "path": "/data/repository/canonical"
+              },
+              "right": {
+                "literal": "my-app"
+              }
+            },
+            {
+              "op": "eq",
+              "left": {
+                "from": {
+                  "node": "$input",
+                  "port": "payload"
+                },
+                "path": "/data/activity/data/ref"
+              },
+              "right": {
+                "literal": "main"
+              }
+            }
+          ]
+        },
+        "input": {
+          "payload": {
+            "from": {
+              "node": "$input",
+              "port": "payload"
+            }
+          },
+          "appId": {
+            "literal": "app_myapp"
+          },
+          "installationId": {
+            "literal": "app-my-app"
+          },
+          "reviewBeforeInstall": {
+            "literal": true
+          }
+        }
+      }
+    ]
+  },
+  "layout": {
+    "merged": {
+      "x": 40,
+      "y": 100
+    },
+    "build": {
+      "x": 340,
+      "y": 100
+    },
+    "build-status": {
+      "x": 640,
+      "y": 100
+    },
+    "built": {
+      "x": 940,
+      "y": 100
+    },
+    "review-gate": {
+      "x": 1240,
+      "y": 100
+    },
+    "to-review": {
+      "x": 1540,
+      "y": 20
+    },
+    "review": {
+      "x": 1840,
+      "y": 20
+    },
+    "automatic": {
+      "x": 1540,
+      "y": 200
+    },
+    "install": {
+      "x": 2140,
+      "y": 100
+    }
+  }
+}

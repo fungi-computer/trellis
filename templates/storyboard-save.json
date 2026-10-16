@@ -1,0 +1,1254 @@
+{
+  "id": "storyboard-save",
+  "definition": {
+    "format": "fungi.workflow/v1",
+    "title": "Storyboard + Save to git",
+    "description": "Everything the Storyboard template does, plus a final Save step: clone the chosen branch, write the Markdown contact sheet into it with Inkcap, then commit and push with Shed. Edit the Save step's Git access (shipped as repository \"storyboard\") for your installation.",
+    "apps": {
+      "prints": {
+        "appId": "app_prints",
+        "role": "media"
+      },
+      "bonsai": {
+        "appId": "app_bonsai"
+      },
+      "shed": {
+        "appId": "app_shed"
+      },
+      "inkcap": {
+        "appId": "app_inkcap"
+      }
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "beats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 12
+        },
+        "aspect": {
+          "type": "string",
+          "enum": ["16:9", "9:16", "1:1"],
+          "default": "16:9"
+        },
+        "style": {
+          "type": "object",
+          "properties": {
+            "notes": {
+              "type": "string",
+              "maxLength": 400,
+              "description": "Visual style shared by every beat."
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "format": "fungi:file",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Canon reference image on the admitted Computer."
+                  }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+              },
+              "maxItems": 4
+            }
+          },
+          "additionalProperties": false
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]{1,128}$",
+          "minLength": 1,
+          "maxLength": 128,
+          "default": "storyboard",
+          "description": "Must name the exact repository authorized on the Save step's Git access (shipped as \"storyboard\"); the run refuses a mismatch instead of saving somewhere else."
+        },
+        "branch": {
+          "type": "string",
+          "enum": ["main", "storyboard-drafts"],
+          "default": "storyboard-drafts",
+          "description": "Branch to commit the contact sheet to; must be one of the branches authorized on the Save step's Git access."
+        }
+      },
+      "required": ["beats"],
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "beatInputs",
+        "kind": "transform",
+        "fields": {
+          "items": {
+            "each": {
+              "over": {
+                "from": {
+                  "node": "$input",
+                  "port": "beats"
+                }
+              },
+              "maxItems": 12,
+              "body": {
+                "object": {
+                  "beat": {
+                    "from": {
+                      "node": "$item",
+                      "port": "value"
+                    }
+                  },
+                  "style": {
+                    "coalesce": [
+                      {
+                        "from": {
+                          "node": "$input",
+                          "port": "style"
+                        }
+                      },
+                      {
+                        "literal": {}
+                      }
+                    ]
+                  },
+                  "aspect": {
+                    "coalesce": [
+                      {
+                        "from": {
+                          "node": "$input",
+                          "port": "aspect"
+                        }
+                      },
+                      {
+                        "literal": "16:9"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "beats",
+        "kind": "map",
+        "over": {
+          "node": "beatInputs",
+          "port": "items"
+        },
+        "body": "beat",
+        "concurrency": 1,
+        "maxItems": 12
+      },
+      {
+        "id": "contactSheet",
+        "kind": "code",
+        "source": "const { shots } = await env.INPUT.read({});\nconst rows = shots.map((shot, index) => {\n  const title = shot.beat.replace(/[\\r\\n]+/g, \" \");\n  const panel = shot.panel?.destination?.path;\n  const clip = shot.clip?.destination?.path;\n  const lines = [\"## \" + (index + 1) + \". \" + title, \"Decision: \" + shot.choice];\n  if (panel) lines.push(\"![Panel](\" + panel + \")\", \"Prints panel: `\" + panel + \"`\");\n  if (clip) lines.push(\"Prints clip: `\" + clip + \"`\");\n  if (shot.note) lines.push(\"Review note: \" + shot.note);\n  if (shot.refusal) lines.push(\"Generation refusal: \" + JSON.stringify(shot.refusal));\n  return lines.join(\"\\n\\n\");\n});\nreturn \"# Storyboard contact sheet and shot list\\n\\n\" + rows.join(\"\\n\\n\");",
+        "input": {
+          "type": "object",
+          "properties": {
+            "shots": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "required": ["shots"],
+          "additionalProperties": false,
+          "title": "Contact sheet",
+          "description": "Collect panel and clip paths into a Markdown contact sheet and shot list."
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 49152
+        },
+        "values": {
+          "shots": {
+            "from": {
+              "node": "beats",
+              "port": "items"
+            }
+          }
+        }
+      },
+      {
+        "id": "saveSetup",
+        "kind": "code",
+        "source": "const { contactSheet, repository, branch } = await env.INPUT.read({});\nconst authorizedRepository = \"storyboard\";\nif (repository !== authorizedRepository)\n  throw new Error(\n    \"This Save step is authorized for repository '\" +\n      authorizedRepository +\n      \"' only. Edit the Save node's Git access to change it.\"\n  );\nconst sheetBytes = new TextEncoder().encode(contactSheet).byteLength;\nconst maxSheetBytes = 48 * 1024;\nif (sheetBytes > maxSheetBytes)\n  throw new Error(\n    \"The contact sheet is \" +\n      sheetBytes +\n      \" UTF-8 bytes, over Inkcap's \" +\n      maxSheetBytes +\n      \"-byte writeFile limit. Shorten the beats or style notes and try again.\"\n  );\nconst saveId = crypto.randomUUID();\nconst base = \"/workspace/.fungi/storyboard-save/\" + saveId;\nconst repoDir = base + \"/repo\";\nconst dir = \"storyboards/\" + saveId;\nconst fileRel = dir + \"/contact-sheet.md\";\nconst filePath = repoDir + \"/\" + fileRel;\nreturn { saveId, branch, base, repoDir, dir, fileRel, filePath };",
+        "input": {
+          "type": "object",
+          "properties": {
+            "contactSheet": {
+              "type": "string",
+              "maxLength": 49152
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "branch": {
+              "type": "string",
+              "enum": ["main", "storyboard-drafts"]
+            }
+          },
+          "required": ["contactSheet", "repository", "branch"],
+          "additionalProperties": false,
+          "title": "Save setup",
+          "description": "Check the requested destination and mint this save's unique id and paths."
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "saveId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "branch": {
+              "type": "string",
+              "enum": ["main", "storyboard-drafts"]
+            },
+            "base": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "repoDir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "dir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "fileRel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "filePath": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^\\/.*"
+            }
+          },
+          "required": [
+            "saveId",
+            "branch",
+            "base",
+            "repoDir",
+            "dir",
+            "fileRel",
+            "filePath"
+          ],
+          "additionalProperties": false
+        },
+        "values": {
+          "contactSheet": {
+            "from": {
+              "node": "contactSheet",
+              "port": "value"
+            }
+          },
+          "repository": {
+            "from": {
+              "node": "$input",
+              "port": "repository"
+            }
+          },
+          "branch": {
+            "from": {
+              "node": "$input",
+              "port": "branch"
+            }
+          }
+        }
+      },
+      {
+        "id": "cloneCommand",
+        "kind": "code",
+        "source": "const { base, repoDir, dir, branch } = await env.INPUT.read({});\nconst quote = (value) => \"'\" + value.replaceAll(\"'\", \"'\\\"'\\\"'\") + \"'\";\nconst command = [\n  \"set -eu\",\n  \"mkdir -p \" + quote(base),\n  \"git init -q \" + quote(repoDir),\n  \"cd \" + quote(repoDir),\n  \"git remote add origin \\\"$FUNGI_GIT_REMOTE\\\"\",\n  \"if git fetch -q --depth 1 origin \" + quote(branch) + \":\" + quote(branch) + \" 2>/dev/null; then git checkout -q \" + quote(branch) + \"; else git checkout -q --orphan \" + quote(branch) + \"; fi\",\n  \"mkdir -p \" + quote(dir)\n].join(\"\\n\");\nreturn { command };",
+        "input": {
+          "type": "object",
+          "properties": {
+            "base": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "repoDir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "dir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "branch": {
+              "type": "string",
+              "enum": ["main", "storyboard-drafts"]
+            }
+          },
+          "required": ["base", "repoDir", "dir", "branch"],
+          "additionalProperties": false,
+          "title": "Clone command",
+          "description": "Build the command that clones or starts the destination branch and prepares an empty directory for the contact sheet."
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16384
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        },
+        "values": {
+          "base": {
+            "from": {
+              "node": "saveSetup",
+              "port": "base"
+            }
+          },
+          "repoDir": {
+            "from": {
+              "node": "saveSetup",
+              "port": "repoDir"
+            }
+          },
+          "dir": {
+            "from": {
+              "node": "saveSetup",
+              "port": "dir"
+            }
+          },
+          "branch": {
+            "from": {
+              "node": "saveSetup",
+              "port": "branch"
+            }
+          }
+        }
+      },
+      {
+        "id": "clone",
+        "kind": "app",
+        "app": "shed",
+        "method": "run",
+        "methodDigest": "sha256:886a067e9faa7b0293849947637c1506ea02f43559eddb01d44dd3b56ae082c8",
+        "values": {
+          "command": {
+            "from": {
+              "node": "cloneCommand",
+              "port": "command"
+            }
+          }
+        },
+        "gitAccess": {
+          "binding": "bonsai",
+          "repository": "storyboard",
+          "branches": ["refs/heads/main", "refs/heads/storyboard-drafts"]
+        }
+      },
+      {
+        "id": "writeSheet",
+        "kind": "app",
+        "app": "inkcap",
+        "method": "writeFile",
+        "methodDigest": "sha256:5a77e008b0130edc14ce93d9365ca1a192d166ae6a4816134527475eae58aa68",
+        "values": {
+          "path": {
+            "from": {
+              "node": "saveSetup",
+              "port": "filePath"
+            }
+          },
+          "content": {
+            "from": {
+              "node": "contactSheet",
+              "port": "value"
+            }
+          }
+        }
+      },
+      {
+        "id": "commitCommand",
+        "kind": "code",
+        "source": "const { repoDir, dir, saveId, branch } = await env.INPUT.read({});\nconst quote = (value) => \"'\" + value.replaceAll(\"'\", \"'\\\"'\\\"'\") + \"'\";\nconst command = [\n  \"set -eu\",\n  \"cd \" + quote(repoDir),\n  \"git add \" + quote(dir),\n  \"git -c user.name=Workflow -c user.email=workflow@fungi.invalid commit -qm \" + quote(\"Save storyboard \" + saveId),\n  \"git push origin \" + quote(\"HEAD:refs/heads/\" + branch)\n].join(\"\\n\");\nreturn { command };",
+        "input": {
+          "type": "object",
+          "properties": {
+            "repoDir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "dir": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "saveId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "branch": {
+              "type": "string",
+              "enum": ["main", "storyboard-drafts"]
+            }
+          },
+          "required": ["repoDir", "dir", "saveId", "branch"],
+          "additionalProperties": false,
+          "title": "Commit command",
+          "description": "Build the command that commits and pushes the saved contact sheet."
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16384
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        },
+        "values": {
+          "repoDir": {
+            "from": {
+              "node": "saveSetup",
+              "port": "repoDir"
+            }
+          },
+          "dir": {
+            "from": {
+              "node": "saveSetup",
+              "port": "dir"
+            }
+          },
+          "saveId": {
+            "from": {
+              "node": "saveSetup",
+              "port": "saveId"
+            }
+          },
+          "branch": {
+            "from": {
+              "node": "saveSetup",
+              "port": "branch"
+            }
+          }
+        }
+      },
+      {
+        "id": "writeOk",
+        "kind": "condition",
+        "test": {
+          "op": "exists",
+          "value": {
+            "from": {
+              "node": "writeSheet",
+              "port": "ok"
+            }
+          }
+        }
+      },
+      {
+        "id": "writeFailed",
+        "kind": "condition",
+        "test": {
+          "op": "exists",
+          "value": {
+            "from": {
+              "node": "writeSheet",
+              "port": "refused"
+            }
+          }
+        }
+      },
+      {
+        "id": "writeFailure",
+        "kind": "code",
+        "source": "const { refusal } = await env.INPUT.read({});\nthrow new Error(\"Save step could not write the contact sheet: \" + JSON.stringify(refusal));\nreturn { failed: true };",
+        "input": {
+          "type": "object",
+          "properties": {
+            "refusal": {
+              "type": "object"
+            }
+          },
+          "required": ["refusal"],
+          "additionalProperties": false,
+          "title": "Write failure",
+          "description": "Always throws, carrying Inkcap's refusal reason, so a failed write stops the run instead of reaching commitPush."
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "failed": {
+              "type": "boolean"
+            }
+          },
+          "required": ["failed"],
+          "additionalProperties": false
+        },
+        "values": {
+          "refusal": {
+            "from": {
+              "node": "writeSheet",
+              "port": "refused"
+            }
+          }
+        }
+      },
+      {
+        "id": "commitPush",
+        "kind": "app",
+        "app": "shed",
+        "method": "run",
+        "methodDigest": "sha256:886a067e9faa7b0293849947637c1506ea02f43559eddb01d44dd3b56ae082c8",
+        "values": {
+          "command": {
+            "from": {
+              "node": "commitCommand",
+              "port": "command"
+            }
+          }
+        },
+        "gitAccess": {
+          "binding": "bonsai",
+          "repository": "storyboard",
+          "branches": ["refs/heads/main", "refs/heads/storyboard-drafts"]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": "clone",
+          "port": "after"
+        },
+        "to": {
+          "node": "writeSheet",
+          "port": "after"
+        }
+      },
+      {
+        "from": {
+          "node": "writeOk",
+          "port": "true"
+        },
+        "to": {
+          "node": "commitPush",
+          "port": "after"
+        }
+      },
+      {
+        "from": {
+          "node": "writeFailed",
+          "port": "true"
+        },
+        "to": {
+          "node": "writeFailure",
+          "port": "after"
+        }
+      }
+    ],
+    "output": {
+      "shots": {
+        "node": "beats",
+        "port": "items"
+      },
+      "contactSheet": {
+        "node": "contactSheet",
+        "port": "value"
+      },
+      "save": {
+        "node": "commitPush",
+        "port": "ok"
+      },
+      "saveFailure": {
+        "node": "writeFailure",
+        "port": "failed"
+      }
+    },
+    "subgraphs": {
+      "beat": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "object",
+              "properties": {
+                "beat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "style": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "string",
+                      "maxLength": 400,
+                      "description": "Visual style shared by every beat."
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "format": "fungi:file",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Canon reference image on the admitted Computer."
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 4
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["beat", "style", "aspect"],
+              "additionalProperties": false
+            },
+            "index": {
+              "type": "integer"
+            }
+          },
+          "required": ["item", "index"],
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "revise",
+            "kind": "repeat",
+            "body": "attempt",
+            "maxRounds": 3,
+            "until": {
+              "op": "neq",
+              "left": {
+                "from": {
+                  "node": "$input",
+                  "port": "choice"
+                }
+              },
+              "right": {
+                "literal": "redo"
+              }
+            }
+          },
+          {
+            "id": "selection",
+            "kind": "code",
+            "source": "const { result } = await env.INPUT.read({});\nreturn { choice: result.choice ?? \"failed\", panel: result.panel ?? null, note: result.note ?? \"\", refusal: result.refusal ?? null };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "type": "object"
+                }
+              },
+              "required": ["result"],
+              "additionalProperties": false,
+              "title": "Review decision",
+              "description": "Keep the review decision and panel for the next steps."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "choice": {
+                  "type": "string",
+                  "enum": ["keep", "animate", "redo", "reject", "failed"]
+                },
+                "panel": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "refusal": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": ["choice", "panel", "note", "refusal"],
+              "additionalProperties": false
+            },
+            "values": {
+              "result": {
+                "coalesce": [
+                  {
+                    "from": {
+                      "node": "revise",
+                      "port": "result"
+                    }
+                  },
+                  {
+                    "from": {
+                      "node": "revise",
+                      "port": "exhausted"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "animate",
+            "kind": "condition",
+            "test": {
+              "op": "eq",
+              "left": {
+                "from": {
+                  "node": "selection",
+                  "port": "choice"
+                }
+              },
+              "right": {
+                "literal": "animate"
+              }
+            }
+          },
+          {
+            "id": "animation",
+            "kind": "code",
+            "source": "const { panel, item } = await env.INPUT.read({});\nif (!panel?.destination?.path) throw new Error(\"An approved panel is required for animation.\");\nreturn { path: panel.destination.path, prompt: \"Animate this approved storyboard panel: \" + item.beat, aspect: item.aspect };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "panel": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "item": {
+                  "type": "object",
+                  "properties": {
+                    "beat": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 400,
+                          "description": "Visual style shared by every beat."
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string",
+                                "format": "fungi:file",
+                                "minLength": 1,
+                                "maxLength": 4096,
+                                "description": "Canon reference image on the admitted Computer."
+                              }
+                            },
+                            "required": ["path"],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 4
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "enum": ["16:9", "9:16", "1:1"]
+                    }
+                  },
+                  "required": ["beat", "style", "aspect"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["panel", "item"],
+              "additionalProperties": false,
+              "title": "Prepare animation",
+              "description": "Use the approved panel as the first frame of an animated clip."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 4096
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["path", "prompt", "aspect"],
+              "additionalProperties": false
+            },
+            "values": {
+              "panel": {
+                "from": {
+                  "node": "selection",
+                  "port": "panel"
+                }
+              },
+              "item": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                }
+              }
+            }
+          },
+          {
+            "id": "clip",
+            "kind": "app",
+            "app": "prints",
+            "method": "generateVideo",
+            "methodDigest": "sha256:a5d57053d0fa1e28459c8c6dafd914dbe14c0040295d1713dd33c64efb681fec",
+            "values": {
+              "settings": {
+                "object": {
+                  "model": {
+                    "literal": "bytedance/seedance-2.0"
+                  },
+                  "prompt": {
+                    "from": {
+                      "node": "animation",
+                      "port": "prompt"
+                    }
+                  },
+                  "resolution": {
+                    "literal": "720p"
+                  },
+                  "aspectRatio": {
+                    "from": {
+                      "node": "animation",
+                      "port": "aspect"
+                    }
+                  },
+                  "durationSeconds": {
+                    "literal": 5
+                  },
+                  "references": {
+                    "array": [
+                      {
+                        "object": {
+                          "path": {
+                            "from": {
+                              "node": "animation",
+                              "port": "path"
+                            }
+                          },
+                          "role": {
+                            "literal": "first-frame"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "shot",
+            "kind": "transform",
+            "fields": {
+              "beat": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                },
+                "path": "/beat"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": {
+              "node": "animate",
+              "port": "true"
+            },
+            "to": {
+              "node": "animation",
+              "port": "after"
+            }
+          }
+        ],
+        "output": {
+          "beat": {
+            "node": "shot",
+            "port": "beat"
+          },
+          "choice": {
+            "node": "selection",
+            "port": "choice"
+          },
+          "panel": {
+            "node": "selection",
+            "port": "panel"
+          },
+          "note": {
+            "node": "selection",
+            "port": "note"
+          },
+          "refusal": {
+            "node": "selection",
+            "port": "refusal"
+          },
+          "clip": {
+            "node": "clip",
+            "port": "ok"
+          }
+        }
+      },
+      "attempt": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "object",
+              "properties": {
+                "beat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "style": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "string",
+                      "maxLength": 400,
+                      "description": "Visual style shared by every beat."
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "format": "fungi:file",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Canon reference image on the admitted Computer."
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 4
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "aspect": {
+                  "type": "string",
+                  "enum": ["16:9", "9:16", "1:1"]
+                }
+              },
+              "required": ["beat", "style", "aspect"],
+              "additionalProperties": false
+            },
+            "round": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "previous": {
+              "type": "object"
+            }
+          },
+          "required": ["item", "round", "previous"],
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "generation",
+            "kind": "code",
+            "source": "const { item, previous } = await env.INPUT.read({});\nconst [width, height] = item.aspect === \"9:16\" ? [864, 1536] : item.aspect === \"1:1\" ? [1024, 1024] : [1536, 864];\nreturn { prompt: [item.beat, item.style.notes ?? \"\", previous.note ?? \"\"].filter(Boolean).join(\"\\n\"), width, height, references: item.style.references ?? [] };",
+            "input": {
+              "type": "object",
+              "properties": {
+                "item": {
+                  "type": "object",
+                  "properties": {
+                    "beat": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 400,
+                          "description": "Visual style shared by every beat."
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string",
+                                "format": "fungi:file",
+                                "minLength": 1,
+                                "maxLength": 4096,
+                                "description": "Canon reference image on the admitted Computer."
+                              }
+                            },
+                            "required": ["path"],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 4
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "enum": ["16:9", "9:16", "1:1"]
+                    }
+                  },
+                  "required": ["beat", "style", "aspect"],
+                  "additionalProperties": false
+                },
+                "previous": {
+                  "type": "object"
+                }
+              },
+              "required": ["item", "previous"],
+              "additionalProperties": false,
+              "title": "Prepare generation",
+              "description": "Combine the beat, visual style and prior review feedback for Prints."
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1920
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1920
+                },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      }
+                    },
+                    "required": ["path"],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 4
+                }
+              },
+              "required": ["prompt", "width", "height", "references"],
+              "additionalProperties": false
+            },
+            "values": {
+              "item": {
+                "from": {
+                  "node": "$input",
+                  "port": "item"
+                }
+              },
+              "previous": {
+                "from": {
+                  "node": "$input",
+                  "port": "previous"
+                }
+              }
+            }
+          },
+          {
+            "id": "panel",
+            "kind": "app",
+            "app": "prints",
+            "method": "generateImage",
+            "methodDigest": "sha256:fb7914d340280ca34edcaa4eb37f9492f32fa15c2f6d3d82e992c792a54a1874",
+            "values": {
+              "settings": {
+                "object": {
+                  "model": {
+                    "literal": "@cf/black-forest-labs/flux-2-klein-4b"
+                  },
+                  "prompt": {
+                    "from": {
+                      "node": "generation",
+                      "port": "prompt"
+                    }
+                  },
+                  "width": {
+                    "from": {
+                      "node": "generation",
+                      "port": "width"
+                    }
+                  },
+                  "height": {
+                    "from": {
+                      "node": "generation",
+                      "port": "height"
+                    }
+                  },
+                  "references": {
+                    "from": {
+                      "node": "generation",
+                      "port": "references"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "look",
+            "kind": "review",
+            "title": "Keep this panel?",
+            "show": [
+              {
+                "node": "panel",
+                "port": "ok"
+              }
+            ],
+            "reviewers": "runner",
+            "timeout": 86400000,
+            "choices": [
+              {
+                "id": "keep",
+                "label": "Keep"
+              },
+              {
+                "id": "animate",
+                "label": "Keep and animate"
+              },
+              {
+                "id": "redo",
+                "label": "Regenerate"
+              },
+              {
+                "id": "reject",
+                "label": "Reject"
+              }
+            ]
+          }
+        ],
+        "edges": [],
+        "output": {
+          "panel": {
+            "node": "panel",
+            "port": "ok"
+          },
+          "choice": {
+            "node": "look",
+            "port": "choice"
+          },
+          "note": {
+            "node": "look",
+            "port": "note"
+          },
+          "refusal": {
+            "node": "panel",
+            "port": "refused"
+          }
+        }
+      }
+    }
+  },
+  "layout": {
+    "$input": {
+      "x": 20,
+      "y": 40
+    },
+    "beatInputs": {
+      "x": 330,
+      "y": 40
+    },
+    "beats": {
+      "x": 650,
+      "y": 40
+    },
+    "contactSheet": {
+      "x": 1010,
+      "y": 40
+    }
+  }
+}

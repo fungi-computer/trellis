@@ -1,0 +1,65 @@
+{
+  "id": "review",
+  "definition": {
+    "format": "fungi.workflow/v1",
+    "title": "Review a result",
+    "description": "Prepare a message, then choose whether to keep it.",
+    "apps": {},
+    "input": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "message",
+        "kind": "transform",
+        "fields": {
+          "text": {
+            "literal": "Ready for review"
+          }
+        }
+      },
+      {
+        "id": "review",
+        "kind": "review",
+        "title": "Keep this result?",
+        "show": [
+          {
+            "node": "message",
+            "port": "text"
+          }
+        ],
+        "reviewers": "runner",
+        "timeout": 86400000,
+        "choices": [
+          {
+            "id": "keep",
+            "label": "Keep"
+          },
+          {
+            "id": "discard",
+            "label": "Discard"
+          }
+        ]
+      }
+    ],
+    "edges": [],
+    "output": {
+      "result": {
+        "node": "review",
+        "port": "keep"
+      }
+    }
+  },
+  "layout": {
+    "message": {
+      "x": 350,
+      "y": 40
+    },
+    "review": {
+      "x": 700,
+      "y": 40
+    }
+  }
+}

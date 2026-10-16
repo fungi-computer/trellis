@@ -1,0 +1,229 @@
+@import "@fungi.computer/caps/tailwind.css";
+@source "./";
+@import "./xyflow.css";
+
+/* Product layout only; Caps components keep their own finish (Prints' frame). */
+html,
+body,
+#trellis-root {
+  height: 100%;
+  margin: 0;
+}
+.trellis {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.wf-editor-host > .wf-editor {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.trellis {
+  background: var(--color-base-200);
+  color: var(--color-base-content);
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+.trellis > [data-slot="tabs"] {
+  flex: none;
+}
+.wf-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+/* The workflow chooser and its actions: one tight 32px row under the tabs. */
+.wf-topbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--spacing-sm);
+  min-height: 2rem;
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+.wf-topbar > :first-child {
+  flex: 1;
+  min-width: 0;
+  max-width: 16rem;
+}
+@media (max-width: 720px) {
+  .wf-topbar {
+    flex-wrap: wrap;
+    min-height: 0;
+  }
+}
+
+/* Collapse the editor's own header into the same tight 32px strip: no inner
+   title (the workflow Select above already names it), one row of controls. */
+.trellis .wf-editor > .wf-bar {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-height: 2rem;
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  gap: var(--spacing-sm);
+  overflow-x: auto;
+}
+.trellis .wf-editor > .wf-bar > * {
+  flex: none;
+  white-space: nowrap;
+}
+.trellis .wf-editor > .wf-bar .wf-bar-version {
+  max-width: 14rem;
+}
+.trellis .wf-editor > .wf-bar .wf-bar-note {
+  margin: 0;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trellis .wf-editor > .wf-bar .wf-bar-restore-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.trellis .wf-editor > .wf-bar .wf-bar-restore-confirm p {
+  margin: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Narrow: wrap to a second line instead of a horizontal-scroll bar, so the
+   validity Status never clips off the (non-scrollable) viewport. */
+@media (max-width: 720px) {
+  .trellis .wf-editor > .wf-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .trellis .wf-editor > .wf-bar > * {
+    white-space: normal;
+  }
+}
+.wf-page {
+  padding: var(--spacing-md);
+  overflow: auto;
+}
+.wf-page h1,
+.wf-run-list h1 {
+  font-size: var(--text-lg);
+  margin-bottom: var(--spacing-sm);
+}
+.wf-page h2,
+.wf-run-detail h2,
+.wf-review h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.wf-runs {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs);
+  flex: 1;
+  min-height: 0;
+}
+.wf-run-list,
+.wf-run-detail {
+  min-width: 0;
+  overflow: auto;
+}
+.wf-run-choice {
+  display: grid;
+  height: auto;
+  text-align: start;
+  white-space: normal;
+  width: 100%;
+  justify-content: start;
+}
+.wf-run-choice time {
+  font-size: var(--text-xs);
+}
+.wf-run-canvas {
+  height: 28rem;
+}
+.wf-run-canvas > .wf-canvas {
+  height: 100%;
+}
+.wf-run-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+.wf-run-canvas {
+  flex: none;
+}
+.wf-review {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+.wf-review img,
+.wf-review video {
+  max-width: 100%;
+  max-height: 22rem;
+  object-fit: contain;
+}
+.wf-review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wf-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--spacing-sm);
+}
+@media (max-width: 720px) {
+  .wf-runs {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    flex: 1;
+  }
+  .wf-run-detail,
+  .wf-run-list {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+.wf-workspace:not([hidden]),
+.wf-editor-host:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.wf-step-result,
+.wf-step-output {
+  display: grid;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  width: 100%;
+}
+.wf-output-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12rem;
+  overflow: auto;
+  margin: 0;
+  font-size: var(--text-xs);
+}
+.wf-output-preview img,
+.wf-output-preview video {
+  display: block;
+  max-width: 100%;
+  max-height: 10rem;
+  object-fit: contain;
+}
+
+@media (max-width: 720px) {
+  .wf-topbar > :first-child {
+    flex-basis: calc(100% - 5rem);
+    max-width: none;
+  }
+}
