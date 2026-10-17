@@ -169,14 +169,18 @@ export function useDraft(store: DraftStore) {
   }, []);
   // Full ports are fetched only for the Apps this open draft actually names;
   // adding or removing an App node changes this stable key, which re-fetches.
-  // (A fresh mount still fetches once with no apps known, then again once
-  // the draft itself loads and the real app set becomes known.)
+  // (The first read waits for the draft, so a fresh mount reads once.)
   const neededAppIdsKey = draft
     ? [...new Set(Object.values(draft.definition.apps).map((app) => app.appId))]
         .sort()
         .join(",")
     : "";
+  const draftLoaded = draft !== null;
   useEffect(() => {
+    // Wait for the draft: it names the Apps whose ports are needed, so one
+    // catalog read (the index, then each named App's ports in parallel)
+    // replaces an index-only read followed by the same read again.
+    if (!draftLoaded) return;
     let active = true;
     setCatalogError(null);
     setCatalogLoading(true);
@@ -209,7 +213,7 @@ export function useDraft(store: DraftStore) {
     return () => {
       active = false;
     };
-  }, [store, catalogAttempt, neededAppIdsKey]);
+  }, [store, catalogAttempt, neededAppIdsKey, draftLoaded]);
   return {
     document,
     draft,

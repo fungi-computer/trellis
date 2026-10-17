@@ -2,16 +2,14 @@ import { applyTheme, getTheme } from "@fungi.computer/stipe/theme";
 import { connectApp, type AppRoot } from "@fungi.computer/agar";
 import { useAppContext } from "@fungi.computer/agar/react";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@fungi.computer/caps/components/tabs";
+import { ChromeProvider } from "./chrome.js";
 import { WorkflowWorkspace } from "./workspace.js";
 import { openWorkflows } from "./workflow-client.js";
 import { appMethods } from "@fungi.computer/agar/backend";
 import { readComputerFile } from "@fungi.computer/agar/computer";
-import type { ReadMedia } from "./runs/review-card.js";
+import { openApp } from "@fungi.computer/agar/apps";
+import type { ReadMedia } from "./runs/review-dock.js";
+import type { OpenInApp } from "./runs/run-timeline.js";
 
 const ENDED: ReadonlySet<string> = new Set([
   "disposing",
@@ -80,7 +78,7 @@ export function WorkflowApp({
 
 /** The connected App surface, also used by the local method-transport proof. */
 export function WorkflowView({ app }: { app: AppRoot | null }) {
-  const [view, setView] = useState("editor");
+  const [view, setView] = useState("runs");
   const openRequest = useAppContext(app)?.openRequest;
   const client = useMemo(
     () =>
@@ -97,33 +95,39 @@ export function WorkflowView({ app }: { app: AppRoot | null }) {
         : undefined,
     [app],
   );
+  const openIn = useMemo<OpenInApp | undefined>(
+    () =>
+      app
+        ? (appId, params) =>
+            openApp(app.capabilities, {
+              appId,
+              intent: { kind: "navigate", params },
+            })
+        : undefined,
+    [app],
+  );
   return (
     <div className="trellis">
-      <Tabs value={view} onValueChange={setView}>
-        <TabsList aria-label="Trellis">
-          <TabsTrigger value="editor">Editor</TabsTrigger>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
-          <TabsTrigger value="triggers">Triggers</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      <div className="wf-workspace">
-        {client && app ? (
-          <WorkflowWorkspace
-            client={client}
-            view={view}
-            onView={setView}
-            readMedia={readMedia}
-            browserActions={app.ui}
-            openRequest={openRequest}
-          />
-        ) : (
-          <main className="wf-page">
-            <h1>Trellis</h1>
-            <p>Open Trellis from your Team to edit and run workflows.</p>
-          </main>
-        )}
-      </div>
+      <ChromeProvider navigation={app?.window.navigation}>
+        <div className="wf-workspace">
+          {client && app ? (
+            <WorkflowWorkspace
+              client={client}
+              view={view}
+              onView={setView}
+              readMedia={readMedia}
+              openIn={openIn}
+              browserActions={app.ui}
+              openRequest={openRequest}
+            />
+          ) : (
+            <main className="wf-page">
+              <h1>Trellis</h1>
+              <p>Open Trellis from your Team to edit and run workflows.</p>
+            </main>
+          )}
+        </div>
+      </ChromeProvider>
     </div>
   );
 }

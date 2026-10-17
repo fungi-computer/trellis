@@ -1,9 +1,10 @@
+import { useCatalogLoading } from "./catalog-loading.js";
 import { Button } from "@fungi.computer/caps/components/button";
 import type { NodeAddress } from "./graph-address.js";
 import { GraphResults, nodeResultsFor } from "./graph-results.js";
 import { nodePorts } from "./graph.js";
 import type { RunStep } from "../runs/run-state.js";
-import type { ReadMedia } from "../runs/review-card.js";
+import type { ReadMedia } from "../runs/review-dock.js";
 import type { Catalog, Node, WorkflowDefinition } from "@fungi.computer/braid";
 import {
   bodyDefinition,
@@ -35,6 +36,7 @@ export function GraphBody({
   readMedia?: ReadMedia;
   graphId?: string;
 }) {
+  const loading = useCatalogLoading();
   const body = bodyDefinition(definition, node);
   const key =
     node.kind === "map" || node.kind === "repeat"
@@ -65,6 +67,7 @@ export function GraphBody({
               catalog,
               step,
               appDisplay,
+              loading,
             );
             return (
               <li key={step.id} className="wf-body-step">
@@ -132,7 +135,10 @@ export function GraphBody({
                       onSelect({ graphId: node.body, nodeId: step.id });
                   }}
                 >
-                  {nodePresentation(body, catalog, step, appDisplay).title}
+                  {
+                    nodePresentation(body, catalog, step, appDisplay, loading)
+                      .title
+                  }
                 </Button>
               ))}
           </details>
@@ -155,6 +161,7 @@ export function GraphBody({
                 catalog,
                 target,
                 appDisplay,
+                loading,
               );
               return (
                 <div key={target.id}>

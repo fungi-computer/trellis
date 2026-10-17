@@ -1,5 +1,6 @@
+import { useCatalogLoading } from "./catalog-loading.js";
 import { GraphResults, nodeResultsFor } from "./graph-results.js";
-import type { ReadMedia } from "../runs/review-card.js";
+import type { ReadMedia } from "../runs/review-dock.js";
 import type { RunStep } from "../runs/run-state.js";
 import { GraphBody } from "./graph-body.js";
 import {
@@ -221,6 +222,7 @@ export function WorkflowCanvas({
     () => window.matchMedia("(max-width: 720px)").matches,
   );
   const initialized = useNodesInitialized();
+  const loading = useCatalogLoading();
   const { fitView, getNodes, getNodesBounds, setViewport } = useReactFlow();
   const paneWidth = useStore((store) => store.width);
   const paneHeight = useStore((store) => store.height);
@@ -271,7 +273,7 @@ export function WorkflowCanvas({
         node.kind === "app"
           ? appDisplay[draft.definition.apps[node.app].appId]?.icon
           : undefined,
-      ...nodePresentation(draft.definition, catalog, node, appDisplay),
+      ...nodePresentation(draft.definition, catalog, node, appDisplay, loading),
       node,
     })),
   ].map((node, index) => {

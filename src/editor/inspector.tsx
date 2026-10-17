@@ -270,7 +270,13 @@ function ScopedInspector({
           <JsonField
             label="Review choices"
             value={node.choices ?? []}
-            schema={S.Array(S.Struct({ id: S.String, label: S.String }))}
+            schema={S.Array(
+              S.Struct({
+                id: S.String,
+                label: S.String,
+                description: S.optionalKey(S.String),
+              }),
+            )}
             onChange={(choices) => {
               update({ ...node, choices });
             }}

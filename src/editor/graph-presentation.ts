@@ -154,6 +154,7 @@ export function nodePresentation(
   catalog: Catalog,
   node: Node,
   appDisplay: DraftDocument["appDisplay"],
+  loading = false,
 ) {
   const method = methodFor(definition, catalog, node);
   if (node.kind === "app") {
@@ -166,11 +167,14 @@ export function nodePresentation(
     const app = Object.hasOwn(definition.apps, node.app)
       ? appDisplay[definition.apps[node.app].appId]?.displayName
       : undefined;
-    return {
-      title: method
+    // Before the first catalog answer a step is loading, not unavailable.
+    const title =
+      method || loading
         ? words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
-        : "App method unavailable",
-      purpose: `${app ?? "App"} · ${purpose ?? "Install the declared App to describe this step."}`,
+        : "App method unavailable";
+    return {
+      title,
+      purpose: `${app ?? "App"} · ${loading ? "Loading Apps…" : (purpose ?? "Install the declared App to describe this step.")}`,
     };
   }
   if (node.kind === "code") {

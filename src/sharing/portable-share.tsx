@@ -74,11 +74,16 @@ function refusal(reply: Exclude<z.output<typeof shareCopyReply>, Copied>) {
   }
 }
 
+export type ShareDialog = "export" | "import" | "fork";
+
+/** The share dialogs; the header menu decides which one is open. */
 export function PortableShare({
   client,
   browserActions,
   workflowId,
   onImported,
+  dialog,
+  onDialog,
 }: {
   client: Pick<
     WorkflowClient,
@@ -87,10 +92,9 @@ export function PortableShare({
   browserActions: Pick<HostUi, "requestBrowserAction">;
   workflowId: string | null;
   onImported: (workflowId: string) => void;
+  dialog: ShareDialog | null;
+  onDialog: (dialog: ShareDialog | null) => void;
 }) {
-  const [dialog, setDialog] = useState<"export" | "import" | "fork" | null>(
-    null,
-  );
   const [versions, setVersions] = useState<
     Awaited<ReturnType<WorkflowClient["listVersions"]>>
   >([]);
@@ -110,6 +114,13 @@ export function PortableShare({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  useEffect(() => {
+    if (dialog === null) return;
+    setError(null);
+    if (dialog === "export") return;
+    setSaved(null);
+    setDetailsOpen(false);
+  }, [dialog]);
   useEffect(() => {
     let active = true;
     setExported(null);
@@ -291,49 +302,10 @@ export function PortableShare({
     : [];
   return (
     <>
-      <Button
-        aria-label="Export workflow"
-        variant="ghost"
-        size="sm"
-        disabled={!workflowId}
-        onClick={() => {
-          setDialog("export");
-          setError(null);
-        }}
-      >
-        Export
-      </Button>
-      <Button
-        aria-label="Import workflow"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          setDialog("import");
-          setError(null);
-          setSaved(null);
-          setDetailsOpen(false);
-        }}
-      >
-        Import
-      </Button>
-      <Button
-        aria-label="Fork workflow"
-        variant="ghost"
-        size="sm"
-        disabled={!workflowId}
-        onClick={() => {
-          setDialog("fork");
-          setError(null);
-          setSaved(null);
-          setDetailsOpen(false);
-        }}
-      >
-        Fork
-      </Button>
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {
-          if (!open && !busy) setDialog(null);
+          if (!open && !busy) onDialog(null);
         }}
       >
         <DialogContent className="wf-portable-share">
@@ -515,7 +487,7 @@ export function PortableShare({
               <Button
                 onClick={() => {
                   onImported(saved.workflowId);
-                  setDialog(null);
+                  onDialog(null);
                 }}
               >
                 Open draft

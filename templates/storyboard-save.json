@@ -1183,6 +1183,7 @@
             "id": "look",
             "kind": "review",
             "title": "Keep this panel?",
+            "detail": "Beat {item} of {items} · try {try} of {tries}",
             "show": [
               {
                 "node": "panel",
@@ -1194,19 +1195,23 @@
             "choices": [
               {
                 "id": "keep",
-                "label": "Keep"
+                "label": "Keep",
+                "description": "added to the contact sheet, then the next beat starts"
               },
               {
                 "id": "animate",
-                "label": "Keep and animate"
+                "label": "Keep and animate",
+                "description": "added to the contact sheet, and Prints makes a short clip from it"
               },
               {
                 "id": "redo",
-                "label": "Regenerate"
+                "label": "Regenerate",
+                "description": "Prints makes a new panel for beat {item}, up to {tries} tries"
               },
               {
                 "id": "reject",
-                "label": "Reject"
+                "label": "Reject",
+                "description": "beat {item} is left out, then the next beat starts"
               }
             ]
           }

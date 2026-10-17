@@ -1,5 +1,4 @@
 import { describeAppError } from "@fungi.computer/agar/errors";
-import { Select } from "@fungi.computer/caps/components/select";
 import { FieldSet } from "@fungi.computer/caps/components/field";
 import { Badge } from "@fungi.computer/caps/components/badge";
 import { Button } from "@fungi.computer/caps/components/button";
@@ -32,13 +31,28 @@ import {
 } from "./draft-store.js";
 import { createCodeNode } from "./code-node.js";
 import { versionRelativeTime } from "../history/relative-time.js";
+import { CatalogLoadingProvider } from "./catalog-loading.js";
+import { useChrome, type ChromeParts } from "../chrome.js";
 import "./editor.css";
 
 export type WorkflowEditorProps = {
   store: DraftStore;
   runPanel?: (version: number | undefined) => ReactNode;
+  /** Only the editor on screen adds its crumbs and commands to the header. */
+  active: boolean;
 };
-function Editor({ store, runPanel }: WorkflowEditorProps) {
+/** Adds the editor's version crumb, commands and status to the header. */
+function ChromeSlot({
+  active,
+  parts,
+}: {
+  active: boolean;
+  parts: ChromeParts;
+}) {
+  useChrome("editor", active ? parts : null);
+  return null;
+}
+function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const state = useDraft(store);
   const runHintId = useId();
   const [publishing, setPublishing] = useState(false);
@@ -337,112 +351,225 @@ function Editor({ store, runPanel }: WorkflowEditorProps) {
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
+  const publish = () => {
+    if (!store.publish || (publicationPaused && !store.checkPublication))
+      return;
+    setPublishing(true);
+    setPublishError(null);
+    const controller = new AbortController();
+    publication.current = controller;
+    const observation =
+      publicationPaused && store.checkPublication
+        ? store.checkPublication(controller.signal)
+        : store.publish(document.revision, controller.signal);
+    setPublicationPaused(false);
+    void observation
+      .then(
+        (version) => {
+          if (controller.signal.aborted) return;
+          setPublicationPaused(false);
+          setPublishedVersion(version);
+          state.refreshHistory();
+          state.refreshCatalog();
+        },
+        (cause: unknown) => {
+          if (controller.signal.aborted) return;
+          setPublicationPaused(cause instanceof PublicationObservationTimeout);
+          setPublishError(
+            publicationFailureCopy(cause) ??
+              describeAppError(cause, {
+                CONFLICT: {
+                  title: "Draft changed",
+                  message:
+                    "Couldn't publish: this draft changed in another window. Reload to see it.",
+                },
+                INVALID_ARGUMENT: {
+                  title: "Invalid draft",
+                  message:
+                    "Couldn't publish: this draft has validation issues. Fix them before publishing.",
+                },
+                HOST_FAILURE: {
+                  title: "Publication failed",
+                  message:
+                    "Couldn't publish: the service couldn't complete this request.",
+                },
+              }).message,
+          );
+        },
+      )
+      .finally(() => {
+        if (!controller.signal.aborted) setPublishing(false);
+      });
+  };
+  const savedLabel = readOnly
+    ? `Version ${String(state.version)} · read only${viewedVersion ? ` · ${viewedVersion.commit.slice(0, 7)}` : ""}`
+    : document.durability === "memory"
+      ? "Unsaved · this window only"
+      : issues.length && state.draft !== state.document?.draft
+        ? "Not saved · fix issues"
+        : state.saving
+          ? "Saving…"
+          : state.error ||
+              state.conflict ||
+              state.draft !== state.document?.draft
+            ? "Not saved"
+            : "Saved";
+  const publishDisabled =
+    publishing ||
+    (!publicationPaused &&
+      (state.saving ||
+        state.conflict ||
+        !!state.error ||
+        catalogUnavailable ||
+        issues.length > 0 ||
+        state.draft !== state.document?.draft));
+  const validLabel = state.catalogLoading
+    ? "Loading Apps…"
+    : state.catalogError
+      ? "Not checked"
+      : issues.length
+        ? `${String(issues.length)} issues`
+        : "Valid";
+  const chooseVersion = (value: string) => {
+    setSelected(null);
+    setConfirmRestore(false);
+    state.setVersion(value === "draft" ? undefined : Number(value));
+  };
+  const chromeParts: ChromeParts = {
+    crumbs: [
+      {
+        id: "version",
+        label: readOnly ? `v${String(state.version)}` : "Draft",
+        siblings: [
+          { id: "draft", label: "Current draft" },
+          ...state.versions.map((item) => ({
+            id: String(item.version),
+            label:
+              `v${String(item.version)} · ${item.title} · ${versionRelativeTime(item.createdAt, now)}`.slice(
+                0,
+                80,
+              ),
+          })),
+        ],
+        select: (sibling) => {
+          if (sibling !== undefined && !state.restoring) chooseVersion(sibling);
+        },
+      },
+    ],
+    primary: [
+      ...(runPanel
+        ? [
+            {
+              id: "run",
+              label: "Run",
+              variant: "outline" as const,
+              disabled: runVersion === undefined,
+              run: () => {
+                setPane(pane === "run" ? "node" : "run");
+                setReveal((value) => value + 1);
+              },
+            },
+          ]
+        : []),
+      ...(readOnly && store.restore
+        ? [
+            {
+              id: "restore",
+              label: "Restore as draft",
+              variant: "primary" as const,
+              disabled: state.saving || state.restoring || state.conflict,
+              run: () => {
+                setConfirmRestore(true);
+              },
+            },
+          ]
+        : store.publish && !readOnly
+          ? [
+              {
+                id: "publish",
+                label: publishing
+                  ? "Publishing…"
+                  : publicationPaused
+                    ? "Check status"
+                    : publishError
+                      ? "Try again"
+                      : "Publish",
+                variant: "primary" as const,
+                disabled: publishDisabled,
+                run: publish,
+              },
+            ]
+          : []),
+    ],
+    status: [
+      { id: "saved", label: savedLabel, tone: "neutral" },
+      {
+        id: "valid",
+        label: validLabel,
+        tone: catalogUnavailable
+          ? "neutral"
+          : issues.length
+            ? "error"
+            : "success",
+      },
+    ],
+  };
+  const notes = [
+    state.historyError,
+    state.restoreNotice,
+    state.restoreError,
+    publishError,
+    publishedVersion,
+    confirmRestore,
+    runPanel !== undefined && runVersion === undefined,
+  ].some(Boolean);
   return (
     <main className="wf-editor" data-mode="build" data-pane={pane}>
-      <header className="wf-bar">
-        {/* The workflow Select above this editor already names it; no inner
-            title here (Levi's rule: a header bar names the page once). */}
-        <Badge size="sm" variant="quiet">
-          {readOnly
-            ? `Version ${String(state.version)} · read only`
-            : document.durability === "memory"
-              ? "Unsaved · this window only"
-              : issues.length && state.draft !== state.document?.draft
-                ? "Not saved · fix issues"
-                : state.saving
-                  ? "Saving…"
-                  : state.error ||
-                      state.conflict ||
-                      state.draft !== state.document?.draft
-                    ? "Not saved"
-                    : "Saved"}
-        </Badge>
-        <div className="wf-version">
-          <Select
-            aria-label="Version"
-            className="select-sm wf-bar-version"
-            value={state.version ?? "draft"}
-            disabled={state.restoring}
-            title={
-              readOnly && viewedVersion
-                ? viewedVersion.commit.slice(0, 7)
-                : undefined
-            }
-            onChange={(event) => {
-              setSelected(null);
-              setConfirmRestore(false);
-              state.setVersion(
-                event.currentTarget.value === "draft"
-                  ? undefined
-                  : Number(event.currentTarget.value),
-              );
-            }}
-          >
-            <option value="draft">Current draft</option>
-            {state.versions.map((item) => (
-              <option key={item.version} value={item.version}>
-                v{item.version} · {item.title} ·{" "}
-                {versionRelativeTime(item.createdAt, now)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {state.historyError ? (
-          <p role="alert" className="wf-bar-note">
-            Version history could not be loaded.
-          </p>
-        ) : null}
-        {readOnly && store.restore ? (
-          confirmRestore ? (
-            <span className="wf-bar-restore-confirm">
-              <p>Replace the current draft with v{state.version}?</p>
-              <Button
-                size="sm"
-                disabled={state.saving || state.restoring}
-                onClick={() => {
-                  setSelected(null);
-                  setConfirmRestore(false);
-                  void state.restoreVersion();
-                }}
-              >
-                Confirm restore
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={state.restoring}
-                onClick={() => {
-                  setConfirmRestore(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </span>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={state.saving || state.restoring || state.conflict}
-              onClick={() => {
-                setConfirmRestore(true);
-              }}
-            >
-              Restore as draft
-            </Button>
-          )
-        ) : null}
-        {state.restoreNotice ? (
-          <p role="status" className="wf-bar-note">
-            {state.restoreNotice}
-          </p>
-        ) : null}
-        {state.restoreError ? (
-          <p role="alert" className="wf-bar-note">
-            {state.restoreError}
-          </p>
-        ) : null}
-        {store.publish && !readOnly ? (
-          <>
+      <CatalogLoadingProvider value={state.catalogLoading}>
+        <ChromeSlot active={active} parts={chromeParts} />
+        {notes ? (
+          <header className="wf-bar">
+            {state.historyError ? (
+              <p role="alert" className="wf-bar-note">
+                Version history could not be loaded.
+              </p>
+            ) : null}
+            {readOnly && store.restore && confirmRestore ? (
+              <span className="wf-bar-restore-confirm">
+                <p>Replace the current draft with v{state.version}?</p>
+                <Button
+                  size="sm"
+                  disabled={state.saving || state.restoring}
+                  onClick={() => {
+                    setSelected(null);
+                    setConfirmRestore(false);
+                    void state.restoreVersion();
+                  }}
+                >
+                  Confirm restore
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={state.restoring}
+                  onClick={() => {
+                    setConfirmRestore(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </span>
+            ) : null}
+            {state.restoreNotice ? (
+              <p role="status" className="wf-bar-note">
+                {state.restoreNotice}
+              </p>
+            ) : null}
+            {state.restoreError ? (
+              <p role="alert" className="wf-bar-note">
+                {state.restoreError}
+              </p>
+            ) : null}
             {publishError ? (
               <p
                 role={publicationPaused ? "status" : "alert"}
@@ -451,323 +578,218 @@ function Editor({ store, runPanel }: WorkflowEditorProps) {
                 {publishError}
               </p>
             ) : null}
-            <Button
-              size="sm"
-              disabled={
-                publishing ||
-                (!publicationPaused &&
-                  (state.saving ||
-                    state.conflict ||
-                    !!state.error ||
-                    catalogUnavailable ||
-                    issues.length > 0 ||
-                    state.draft !== state.document?.draft))
-              }
-              onClick={() => {
-                if (
-                  !store.publish ||
-                  (publicationPaused && !store.checkPublication)
-                )
-                  return;
-                setPublishing(true);
-                setPublishError(null);
-                const controller = new AbortController();
-                publication.current = controller;
-                const observation =
-                  publicationPaused && store.checkPublication
-                    ? store.checkPublication(controller.signal)
-                    : store.publish(document.revision, controller.signal);
-                setPublicationPaused(false);
-                void observation
-                  .then(
-                    (version) => {
-                      if (controller.signal.aborted) return;
-                      setPublicationPaused(false);
-                      setPublishedVersion(version);
-                      state.refreshHistory();
-                      state.refreshCatalog();
-                    },
-                    (cause: unknown) => {
-                      if (controller.signal.aborted) return;
-                      setPublicationPaused(
-                        cause instanceof PublicationObservationTimeout,
-                      );
-                      setPublishError(
-                        publicationFailureCopy(cause) ??
-                          describeAppError(cause, {
-                            CONFLICT: {
-                              title: "Draft changed",
-                              message:
-                                "Couldn't publish: this draft changed in another window. Reload to see it.",
-                            },
-                            INVALID_ARGUMENT: {
-                              title: "Invalid draft",
-                              message:
-                                "Couldn't publish: this draft has validation issues. Fix them before publishing.",
-                            },
-                            HOST_FAILURE: {
-                              title: "Publication failed",
-                              message:
-                                "Couldn't publish: the service couldn't complete this request.",
-                            },
-                          }).message,
-                      );
-                    },
-                  )
-                  .finally(() => {
-                    if (!controller.signal.aborted) setPublishing(false);
-                  });
-              }}
-            >
-              {publishing
-                ? "Publishing…"
-                : publicationPaused
-                  ? "Check status"
-                  : publishError
-                    ? "Try again"
-                    : "Publish"}
-            </Button>
-          </>
-        ) : null}
-        {publishedVersion ? (
-          <Badge variant="quiet" role="status">
-            Published v{publishedVersion}
-          </Badge>
-        ) : null}
-        {runPanel ? (
-          <Button
-            size="sm"
-            disabled={runVersion === undefined}
-            aria-describedby={runVersion === undefined ? runHintId : undefined}
-            variant="ghost"
-            onClick={() => {
-              setPane(pane === "run" ? "node" : "run");
-              setReveal((value) => value + 1);
-            }}
-          >
-            Run
-          </Button>
-        ) : null}
-        {runPanel && runVersion === undefined ? (
-          <p id={runHintId} className="wf-muted wf-bar-note">
-            Publish a version to run this workflow.
-          </p>
-        ) : null}
-        <Status
-          className="ml-auto"
-          size="compact"
-          tone={
-            catalogUnavailable ? "neutral" : issues.length ? "error" : "success"
-          }
-          label={
-            state.catalogLoading
-              ? "Checking…"
-              : state.catalogError
-                ? "Not checked"
-                : issues.length
-                  ? `${String(issues.length)} issues`
-                  : "Valid"
-          }
-        />
-      </header>
-      <EditorPanes
-        pane={pane}
-        reveal={reveal}
-        palette={
-          <nav className="wf-pane-body" aria-label="Node palette">
-            {state.catalogError ? (
-              <p role="alert">
-                App catalog could not be loaded. Your draft is still available.
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={state.refreshCatalog}
-                >
-                  Retry catalog
-                </Button>
+            {publishedVersion ? (
+              <Badge variant="quiet" role="status">
+                Published v{publishedVersion}
+              </Badge>
+            ) : null}
+            {runPanel && runVersion === undefined ? (
+              <p id={runHintId} className="wf-muted wf-bar-note">
+                Publish a version to run this workflow.
               </p>
             ) : null}
-            <SearchInput
-              aria-label="Find a node"
-              placeholder="Find a method…"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.currentTarget.value);
+          </header>
+        ) : null}
+        <EditorPanes
+          pane={pane}
+          reveal={reveal}
+          palette={
+            <nav className="wf-pane-body" aria-label="Node palette">
+              {state.catalogError ? (
+                <p role="alert">
+                  App catalog could not be loaded. Your draft is still
+                  available.
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={state.refreshCatalog}
+                  >
+                    Retry catalog
+                  </Button>
+                </p>
+              ) : null}
+              <SearchInput
+                aria-label="Find a node"
+                placeholder="Find a method…"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.currentTarget.value);
+                }}
+              />
+              {Object.keys(document.palette).length === 0 ? (
+                <p className="wf-muted">
+                  App methods will appear when the installed App catalog is
+                  connected.
+                </p>
+              ) : null}
+              {[...new Set(shown.map((entry) => entry.group))].map((group) => (
+                <section key={group}>
+                  <DataListHeading level={3}>
+                    <span className="flex items-center gap-xs">
+                      {document.appDisplay[group] ? (
+                        <WorkflowMark
+                          appIcon={document.appDisplay[group].icon}
+                          appName={document.appDisplay[group].displayName}
+                          kind="app"
+                        />
+                      ) : null}
+                      {document.appDisplay[group]?.displayName ?? group}
+                    </span>
+                  </DataListHeading>
+                  <DataList density="compact">
+                    {shown
+                      .filter((entry) => entry.group === group)
+                      .map((entry) => (
+                        <DataRow key={entry.key} className="block">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="wf-palette-entry h-auto w-full min-w-0 cursor-grab items-start justify-start gap-xs whitespace-normal text-start"
+                            disabled={readOnly}
+                            draggable={!readOnly}
+                            onDragStart={(event) => {
+                              event.dataTransfer.setData(
+                                "application/x-fungi-node",
+                                entry.key,
+                              );
+                            }}
+                            onClick={() => {
+                              add(entry.key);
+                            }}
+                          >
+                            <WorkflowMark
+                              appIcon={
+                                entry.appId
+                                  ? document.appDisplay[entry.appId]?.icon
+                                  : undefined
+                              }
+                              appName={
+                                document.appDisplay[entry.group]?.displayName ??
+                                entry.group
+                              }
+                              kind={entry.appId ? "app" : entry.key}
+                            />
+                            <span className="grid min-w-0 gap-2xs">
+                              <span>{entry.name}</span>
+                              <span
+                                className="wf-muted line-clamp-2 font-normal"
+                                title={entry.description}
+                              >
+                                {entry.description}
+                              </span>
+                            </span>
+                          </Button>
+                        </DataRow>
+                      ))}
+                  </DataList>
+                </section>
+              ))}
+            </nav>
+          }
+          canvas={
+            <WorkflowCanvas
+              key={state.version ?? "draft"}
+              readOnly={readOnly}
+              draft={draft}
+              catalog={catalog}
+              appDisplay={document.appDisplay}
+              issues={issues}
+              selected={selected}
+              onSelect={choose}
+              onMove={(id, position) => {
+                if (readOnly) return;
+                state.setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        layout: { ...current.layout, [id]: position },
+                      }
+                    : current,
+                );
+              }}
+              onConnect={(from, to) => {
+                connectPorts("root", from, to);
+              }}
+              onRemove={(nodeId) => {
+                remove({ graphId: "root", nodeId });
+              }}
+              onDisconnect={(index) => {
+                if (readOnly) return;
+                const removed = draft.definition.edges[index];
+                state.setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        definition: {
+                          ...current.definition,
+                          edges: current.definition.edges.filter(
+                            (edge) => edge !== removed,
+                          ),
+                        },
+                      }
+                    : current,
+                );
+              }}
+              onDrop={(key, point) => {
+                add(key, flow.screenToFlowPosition(point));
               }}
             />
-            {Object.keys(document.palette).length === 0 ? (
-              <p className="wf-muted">
-                App methods will appear when the installed App catalog is
-                connected.
-              </p>
-            ) : null}
-            {[...new Set(shown.map((entry) => entry.group))].map((group) => (
-              <section key={group}>
-                <DataListHeading level={3}>
-                  <span className="flex items-center gap-xs">
-                    {document.appDisplay[group] ? (
-                      <WorkflowMark
-                        appIcon={document.appDisplay[group].icon}
-                        appName={document.appDisplay[group].displayName}
-                        kind="app"
-                      />
-                    ) : null}
-                    {document.appDisplay[group]?.displayName ?? group}
+          }
+          inspector={
+            pane === "run" && runPanel ? (
+              <div className="wf-pane-body">{runPanel(runVersion)}</div>
+            ) : (
+              <FieldSet
+                legend={
+                  <span className="sr-only">
+                    {selected ? "Node" : "Workflow"}
                   </span>
-                </DataListHeading>
-                <DataList density="compact">
-                  {shown
-                    .filter((entry) => entry.group === group)
-                    .map((entry) => (
-                      <DataRow key={entry.key} className="block">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="wf-palette-entry h-auto w-full min-w-0 cursor-grab items-start justify-start gap-xs whitespace-normal text-start"
-                          disabled={readOnly}
-                          draggable={!readOnly}
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData(
-                              "application/x-fungi-node",
-                              entry.key,
-                            );
-                          }}
-                          onClick={() => {
-                            add(entry.key);
-                          }}
-                        >
-                          <WorkflowMark
-                            appIcon={
-                              entry.appId
-                                ? document.appDisplay[entry.appId]?.icon
-                                : undefined
-                            }
-                            appName={
-                              document.appDisplay[entry.group]?.displayName ??
-                              entry.group
-                            }
-                            kind={entry.appId ? "app" : entry.key}
-                          />
-                          <span className="grid min-w-0 gap-2xs">
-                            <span>{entry.name}</span>
-                            <span
-                              className="wf-muted line-clamp-2 font-normal"
-                              title={entry.description}
-                            >
-                              {entry.description}
-                            </span>
-                          </span>
-                        </Button>
-                      </DataRow>
-                    ))}
-                </DataList>
-              </section>
-            ))}
-          </nav>
-        }
-        canvas={
-          <WorkflowCanvas
-            key={state.version ?? "draft"}
-            readOnly={readOnly}
-            draft={draft}
-            catalog={catalog}
-            appDisplay={document.appDisplay}
-            issues={issues}
-            selected={selected}
-            onSelect={choose}
-            onMove={(id, position) => {
-              if (readOnly) return;
-              state.setDraft((current) =>
-                current
-                  ? {
-                      ...current,
-                      layout: { ...current.layout, [id]: position },
-                    }
-                  : current,
-              );
-            }}
-            onConnect={(from, to) => {
-              connectPorts("root", from, to);
-            }}
-            onRemove={(nodeId) => {
-              remove({ graphId: "root", nodeId });
-            }}
-            onDisconnect={(index) => {
-              if (readOnly) return;
-              const removed = draft.definition.edges[index];
-              state.setDraft((current) =>
-                current
-                  ? {
-                      ...current,
-                      definition: {
-                        ...current.definition,
-                        edges: current.definition.edges.filter(
-                          (edge) => edge !== removed,
-                        ),
-                      },
-                    }
-                  : current,
-              );
-            }}
-            onDrop={(key, point) => {
-              add(key, flow.screenToFlowPosition(point));
-            }}
-          />
-        }
-        inspector={
-          pane === "run" && runPanel ? (
-            <div className="wf-pane-body">{runPanel(runVersion)}</div>
-          ) : (
-            <FieldSet
-              legend={
-                <span className="sr-only">
-                  {selected ? "Node" : "Workflow"}
-                </span>
-              }
-              disabled={readOnly}
-              className="wf-inspector-fields"
-            >
-              <Inspector
-                key={selected ? JSON.stringify(selected) : "workflow"}
-                draft={draft}
-                catalog={catalog}
-                appDisplay={state.document?.appDisplay ?? document.appDisplay}
-                selected={selected}
-                issues={issues}
-                onChange={update}
-                onRemove={remove}
-                onConnect={connectPorts}
-              />
-            </FieldSet>
-          )
-        }
-      />
-      {refusal || state.error || state.conflict ? (
-        <Surface
-          role="alert"
-          placement="embedded"
-          size="sm"
-          className="wf-refusal"
-        >
-          {refusal ??
-            (state.conflict
-              ? "This draft changed elsewhere. Your edits are still in this window; discard your local edits to open the latest draft."
-              : "Draft could not be saved. Your edits remain in this window.")}
-          {state.conflict ? (
-            <Button
-              variant="ghost"
-              disabled={state.saving}
-              onClick={state.reload}
-            >
-              Discard local edits and reload
-            </Button>
-          ) : state.error ? (
-            <Button variant="ghost" onClick={state.retrySave}>
-              Retry save
-            </Button>
-          ) : null}
-        </Surface>
-      ) : null}
+                }
+                disabled={readOnly}
+                className="wf-inspector-fields"
+              >
+                <Inspector
+                  key={selected ? JSON.stringify(selected) : "workflow"}
+                  draft={draft}
+                  catalog={catalog}
+                  appDisplay={state.document?.appDisplay ?? document.appDisplay}
+                  selected={selected}
+                  issues={issues}
+                  onChange={update}
+                  onRemove={remove}
+                  onConnect={connectPorts}
+                />
+              </FieldSet>
+            )
+          }
+        />
+        {refusal || state.error || state.conflict ? (
+          <Surface
+            role="alert"
+            placement="embedded"
+            size="sm"
+            className="wf-refusal"
+          >
+            {refusal ??
+              (state.conflict
+                ? "This draft changed elsewhere. Your edits are still in this window; discard your local edits to open the latest draft."
+                : "Draft could not be saved. Your edits remain in this window.")}
+            {state.conflict ? (
+              <Button
+                variant="ghost"
+                disabled={state.saving}
+                onClick={state.reload}
+              >
+                Discard local edits and reload
+              </Button>
+            ) : state.error ? (
+              <Button variant="ghost" onClick={state.retrySave}>
+                Retry save
+              </Button>
+            ) : null}
+          </Surface>
+        ) : null}
+      </CatalogLoadingProvider>
     </main>
   );
 }

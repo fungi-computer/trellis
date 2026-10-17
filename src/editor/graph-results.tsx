@@ -1,5 +1,5 @@
 import type { PortSchema } from "@fungi.computer/braid";
-import type { ReadMedia } from "../runs/review-card.js";
+import type { ReadMedia } from "../runs/review-dock.js";
 import { NodeStatus } from "../runs/node-status.js";
 import { StepOutput } from "../runs/output-preview.js";
 import type { RunStep } from "../runs/run-state.js";

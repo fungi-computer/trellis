@@ -16,9 +16,3 @@
 .wf-portable-share ul {
   padding-inline-start: var(--spacing-lg);
 }
-
-@media (max-width: 720px) {
-  .wf-topbar-workflow {
-    flex-basis: 100%;
-  }
-}

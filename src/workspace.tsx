@@ -1,24 +1,35 @@
 import type { HostUi } from "@fungi.computer/agar";
-import { PortableShare } from "./sharing/portable-share.js";
+import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@fungi.computer/caps/components/button";
-import { Select } from "@fungi.computer/caps/components/select";
+import { useChrome, type ChromeCrumb } from "./chrome.js";
 import { WorkflowEditor } from "./editor/editor.js";
 import { emptyDraft } from "./editor/draft-store.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
 import { Runs } from "./runs/runs.js";
 import { RunWorkflow } from "./runs/run-workflow.js";
-import type { ReadMedia } from "./runs/review-card.js";
+import type { ReadMedia } from "./runs/review-dock.js";
+import type { OpenInApp } from "./runs/run-timeline.js";
 import { Triggers } from "./triggers/triggers.js";
 import { Templates } from "./templates/templates.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
+const viewLabels = {
+  runs: "Runs",
+  editor: "Editor",
+  triggers: "Triggers",
+  templates: "Templates",
+} as const;
+const isView = (value: string): value is keyof typeof viewLabels =>
+  Object.hasOwn(viewLabels, value);
+
 export function WorkflowWorkspace({
   client,
   view,
   onView,
   readMedia,
+  openIn,
   browserActions,
   openRequest,
 }: {
@@ -26,6 +37,7 @@ export function WorkflowWorkspace({
   view: string;
   onView: (view: string) => void;
   readMedia?: ReadMedia;
+  openIn?: OpenInApp;
   browserActions?: Pick<HostUi, "requestBrowserAction">;
   openRequest?: AppOpenRequest | null;
 }) {
@@ -34,6 +46,9 @@ export function WorkflowWorkspace({
   > | null>(null);
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  /** Runs lists every workflow's runs until a workflow is chosen as the filter. */
+  const [filtered, setFiltered] = useState(false);
+  const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -49,6 +64,14 @@ export function WorkflowWorkspace({
       handledRequest.current.requestId === openRequest.requestId
     )
       return;
+    const run = openRequest.params.find((param) => param.key === "run")?.value;
+    if (run !== undefined && run !== "") {
+      handledRequest.current = { client, requestId: openRequest.requestId };
+      setSelectedRun(run);
+      setFiltered(false);
+      onView("runs");
+      return;
+    }
     const target = workflowIdSchema.safeParse(
       openRequest.params.find((param) => param.key === "workflow")?.value,
     );
@@ -121,45 +144,114 @@ export function WorkflowWorkspace({
       setBusy(false);
     }
   }
+  const workflows = Array.isArray(library) ? library : [];
+  const title = workflows.find((item) => item.workflowId === workflowId)?.title;
+  const goView = (next: string) => {
+    if (!isView(next)) return;
+    if (next === "runs") setFiltered(true);
+    onView(next);
+  };
+  const home = () => {
+    setFiltered(false);
+    setSelectedRun(null);
+    onView("runs");
+  };
+  const viewCrumb = (
+    siblings: readonly (keyof typeof viewLabels)[],
+    unfiltered = false,
+  ) => ({
+    id: "view",
+    label: isView(view) ? viewLabels[view] : view,
+    siblings: siblings.map((id) => ({ id, label: viewLabels[id] })),
+    select: (sibling?: string) => {
+      if (sibling === undefined) return;
+      if (sibling === "runs" && unfiltered) home();
+      else goView(sibling);
+    },
+  });
+  const trellis: ChromeCrumb = { id: "home", label: "Trellis", select: home };
+  let crumbs: readonly ChromeCrumb[];
+  if (view === "templates")
+    crumbs = [trellis, { id: "view", label: "Templates" }];
+  else if (view === "runs" && !filtered)
+    crumbs = [
+      trellis,
+      viewCrumb(["runs", "editor", "triggers", "templates"], true),
+    ];
+  else
+    crumbs = [
+      trellis,
+      {
+        id: "workflow",
+        label: title ?? "Choose a workflow",
+        siblings: workflows.map((item) => ({
+          id: item.workflowId,
+          label: item.title,
+        })),
+        select: (sibling?: string) => {
+          if (sibling !== undefined) setWorkflowId(sibling);
+        },
+      },
+      viewCrumb(["editor", "runs", "triggers", "templates"]),
+    ];
+  const share = browserActions
+    ? [
+        {
+          id: "fork",
+          label: "Fork",
+          disabled: !workflowId,
+          run: () => {
+            setShareDialog("fork");
+          },
+        },
+        {
+          id: "export",
+          label: "Export",
+          disabled: !workflowId,
+          run: () => {
+            setShareDialog("export");
+          },
+        },
+        {
+          id: "import",
+          label: "Import",
+          run: () => {
+            setShareDialog("import");
+          },
+        },
+      ]
+    : [];
+  useChrome("workspace", {
+    crumbs,
+    menu: [
+      {
+        id: "new",
+        label: "New workflow",
+        disabled: busy,
+        run: () => void create(),
+      },
+      ...share,
+    ],
+    back: {
+      can: view !== "runs" || selectedRun !== null,
+      go: () => {
+        if (view === "runs") setSelectedRun(null);
+        else onView("runs");
+      },
+    },
+  });
   return (
     <>
-      {view !== "templates" ? (
-        <div className="wf-topbar">
-          <Select
-            aria-label="Workflow"
-            className="select-sm"
-            value={workflowId ?? ""}
-            onChange={(event) => {
-              setWorkflowId(event.currentTarget.value || null);
-            }}
-          >
-            <option value="" disabled>
-              Choose a workflow…
-            </option>
-            {(Array.isArray(library) ? library : []).map((item) => (
-              <option key={item.workflowId} value={item.workflowId}>
-                {item.title}
-              </option>
-            ))}
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => void create()}
-          >
-            New
-          </Button>
-          {browserActions ? (
-            <PortableShare
-              key={workflowId ?? "import"}
-              client={client}
-              browserActions={browserActions}
-              workflowId={workflowId}
-              onImported={choose}
-            />
-          ) : null}
-        </div>
+      {browserActions ? (
+        <PortableShare
+          key={workflowId ?? "import"}
+          client={client}
+          browserActions={browserActions}
+          workflowId={workflowId}
+          onImported={choose}
+          dialog={shareDialog}
+          onDialog={setShareDialog}
+        />
       ) : null}
       {error ? (
         <p role="alert" className="wf-page">
@@ -181,6 +273,7 @@ export function WorkflowWorkspace({
           <WorkflowEditor
             key={workflowId}
             store={store}
+            active={view === "editor"}
             runPanel={(version) => (
               <RunWorkflow
                 key={version}
@@ -238,10 +331,11 @@ export function WorkflowWorkspace({
       {view === "runs" ? (
         <Runs
           client={client}
-          workflowId={workflowId ?? undefined}
+          workflowId={filtered ? (workflowId ?? undefined) : undefined}
           selectedRun={selectedRun}
           onSelect={setSelectedRun}
           readMedia={readMedia}
+          openIn={openIn}
         />
       ) : null}
       {view === "triggers" ? (

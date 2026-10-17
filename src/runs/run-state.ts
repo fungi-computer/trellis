@@ -1,5 +1,8 @@
 import * as z from "zod";
+import * as S from "effect/Schema";
+import { resultRowSchemaV1 } from "@fungi.computer/agar";
 import { runOutcomeSchema } from "@fungi.computer/workflows-wire";
+import { loopPositionSchema } from "@fungi.computer/braid";
 const nodeStateSchema = z.enum([
   "queued",
   "running",
@@ -12,18 +15,23 @@ const event = z.object({
   nodeId: z.string(),
   graphId: z.string().optional(),
   iteration: z.string(),
+  /** Which Map item and Repeat try the runtime ran this in; decoded where it is shown. */
+  position: z.json().optional(),
   state: nodeStateSchema,
   attempt: z.number(),
   recordedAt: z.number().int().nonnegative().optional(),
   durationMs: z.number().optional(),
   costMilliunits: z.number().optional(),
   output: z.record(z.string(), z.json()).optional(),
+  /** How the App says this finished call reads; decoded where it is shown. */
+  row: z.json().optional(),
   refusal: z.string().optional(),
   errorMessage: z.string().max(1024).optional(),
 });
 const reviewSchema = z.object({
   nodeId: z.string(),
   iteration: z.string(),
+  position: z.json().optional(),
   title: z.string(),
   show: z.array(z.json()),
   choices: z.array(z.string()).optional(),
@@ -43,7 +51,7 @@ export type RunStatus = z.output<typeof runStatusSchema>;
 export type Review = z.output<typeof reviewSchema>;
 export type NodeState = z.output<typeof nodeStateSchema> | "cancelled";
 /** Owner cancellation stops unfinished presentation without rewriting recorded events. */
-export function runNodeState(
+function runNodeState(
   state: NodeState,
   outcome: RunStatus["outcome"],
 ): NodeState {
@@ -127,3 +135,53 @@ function recordedReviewOutput(
 }
 
 export type RunStep = ReturnType<typeof runSteps>[number];
+
+/** The App's own reading of a finished step, when it declared one and it decodes. */
+export function stepRow(step: Readonly<{ row?: unknown }>) {
+  if (step.row === undefined) return undefined;
+  const decoded = S.decodeUnknownOption(resultRowSchemaV1)(step.row);
+  return decoded._tag === "Some" ? decoded.value : undefined;
+}
+
+/** Where the runtime ran a step or review; no position when it is unreadable. */
+export function stepPosition(step: Readonly<{ position?: unknown }>) {
+  if (step.position === undefined) return [];
+  const decoded = S.decodeUnknownOption(loopPositionSchema)(step.position);
+  return decoded._tag === "Some" ? decoded.value : [];
+}
+
+/** Which part of the Runs list a run belongs in. */
+export function runSection(run: RunStatus | undefined) {
+  if (run === undefined) return "running" as const;
+  if (run.outcome !== "active" || terminal(run.status))
+    return "finished" as const;
+  return run.reviews.some(({ status }) => status === "pending")
+    ? ("needs-you" as const)
+    : ("running" as const);
+}
+
+/** The bead a run wears in the list. */
+export function runBeadState(run: RunStatus | undefined): NodeState {
+  const section = runSection(run);
+  if (section === "needs-you") return "waiting";
+  if (section === "running") return "running";
+  if (run?.outcome === "cancelled") return "cancelled";
+  return run !== undefined &&
+    ["errored", "failed", "terminated"].includes(run.status)
+    ? "failed"
+    : "complete";
+}
+
+/** One plain line for the list: the open question, else the newest thing an App did. */
+export function runLatestLine(run: RunStatus | undefined) {
+  if (run === undefined) return undefined;
+  const pending = run.reviews.find(({ status }) => status === "pending");
+  if (run.outcome === "active" && pending) return pending.review.title;
+  for (const event of [...run.events].reverse()) {
+    const row = stepRow(event);
+    if (row) return row.title;
+  }
+  if (run.outcome === "cancelled") return "Cancelled";
+  if (["errored", "failed", "terminated"].includes(run.status)) return "Failed";
+  return runSection(run) === "finished" ? "Finished" : "Running";
+}

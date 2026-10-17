@@ -4,7 +4,7 @@ import * as S from "effect/Schema";
 import { workflowDefinitionSchema } from "@fungi.computer/braid";
 import { workflowClient } from "../src/workflow-client.js";
 import { Runs } from "../src/runs/runs.js";
-import type { ReadMedia } from "../src/runs/review-card.js";
+import type { ReadMedia } from "../src/runs/review-dock.js";
 import "../src/trellis.css";
 import "../src/editor/editor.css";
 import "@xyflow/react/dist/style.css";

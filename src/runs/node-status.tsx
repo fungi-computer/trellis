@@ -6,20 +6,34 @@ import type { NodeState } from "./run-state.js";
 const tones = {
   queued: "neutral",
   running: "info",
-  waiting: "warning",
+  waiting: "primary",
   complete: "success",
   failed: "error",
   skipped: "neutral",
   cancelled: "neutral",
 } satisfies Record<NodeState, StatusTone>;
-export function NodeStatus({ state }: { state: NodeState }) {
+/**
+ * One bead per step state, the same Caps bead the tool timeline wears. `label`
+ * words the state for a person; `bare` keeps only the bead and its name.
+ */
+export function NodeStatus({
+  state,
+  label = state,
+  bare = false,
+}: {
+  state: NodeState;
+  label?: string;
+  bare?: boolean;
+}) {
   return (
     <Status
       role="img"
-      aria-label={state}
-      label={state}
+      aria-label={label}
+      title={bare ? label : undefined}
+      {...(bare ? {} : { label })}
       data-state={state}
       glyph="dot"
+      motion={state === "running" ? "bounce" : "none"}
       size="compact"
       tone={tones[state]}
     />

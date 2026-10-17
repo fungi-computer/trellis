@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { useEffect, useState } from "react";
 import type { Json } from "@fungi.computer/braid";
-import type { ReadMedia } from "./review-card.js";
+import type { ReadMedia } from "./review-dock.js";
 import type { RunStep } from "./run-state.js";
 import { versionRelativeTime } from "../history/relative-time.js";
 
@@ -11,26 +11,8 @@ const mediaSchema = z.object({
 });
 const messageSchema = z.object({ message: z.string() });
 
-/** Only the existing admitted Computer reader resolves media; result strings are never URLs. */
-export function OutputPreview({
-  value,
-  format,
-  readMedia,
-}: {
-  value: Json;
-  format?: string;
-  readMedia?: ReadMedia;
-}) {
-  const media = mediaSchema.safeParse(value);
-  const text = z.string().safeParse(value);
-  const path = media.success
-    ? media.data.destination.path
-    : text.success && ["fungi:image", "fungi:video"].includes(format ?? "")
-      ? text.data
-      : undefined;
-  const video = media.success
-    ? media.data.format === "mp4"
-    : format === "fungi:video";
+/** Read one Computer file through the admitted reader into an object URL while mounted. */
+function useMediaPreview(path: string | undefined, readMedia?: ReadMedia) {
   const [preview, setPreview] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -54,6 +36,50 @@ export function OutputPreview({
       if (url) URL.revokeObjectURL(url);
     };
   }, [path, readMedia]);
+  return { preview, failed };
+}
+
+/** A small still of what a step made, for the leading edge of its timeline row. */
+export function MediaThumb({
+  media,
+  readMedia,
+}: {
+  media: Readonly<{ path: string; format: "fungi:image" | "fungi:video" }>;
+  readMedia?: ReadMedia;
+}) {
+  const { preview } = useMediaPreview(media.path, readMedia);
+  return (
+    <span className="wf-thumb" aria-hidden="true">
+      {preview === null ? null : media.format === "fungi:video" ? (
+        <video src={preview} muted preload="metadata" />
+      ) : (
+        <img src={preview} alt="" />
+      )}
+    </span>
+  );
+}
+
+/** Only the existing admitted Computer reader resolves media; result strings are never URLs. */
+export function OutputPreview({
+  value,
+  format,
+  readMedia,
+}: {
+  value: Json;
+  format?: string;
+  readMedia?: ReadMedia;
+}) {
+  const media = mediaSchema.safeParse(value);
+  const text = z.string().safeParse(value);
+  const path = media.success
+    ? media.data.destination.path
+    : text.success && ["fungi:image", "fungi:video"].includes(format ?? "")
+      ? text.data
+      : undefined;
+  const video = media.success
+    ? media.data.format === "mp4"
+    : format === "fungi:video";
+  const { preview, failed } = useMediaPreview(path, readMedia);
   return (
     <div className="wf-output-preview">
       {preview ? (

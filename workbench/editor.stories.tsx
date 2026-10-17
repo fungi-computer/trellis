@@ -3,6 +3,7 @@ import type { Json } from "@fungi.computer/braid";
 import { ValueField } from "../src/editor/value-field.js";
 import { useState } from "react";
 import { WorkflowEditor } from "../src/editor/editor.js";
+import { ChromeFrame } from "./chrome-frame.js";
 import { memoryDraftStore, emptyDraft } from "../src/editor/draft-store.js";
 import { rowDraftStore } from "../src/editor/row-draft-store.js";
 import { workflowClient } from "../src/workflow-client.js";
@@ -16,7 +17,11 @@ export function Editor() {
       Shed: { displayName: "Shed", icon: "computer" },
     }),
   );
-  return <WorkflowEditor store={store} />;
+  return (
+    <ChromeFrame>
+      <WorkflowEditor store={store} active />
+    </ChromeFrame>
+  );
 }
 export function Empty() {
   const [store] = useState(() =>
@@ -25,7 +30,11 @@ export function Empty() {
       Shed: { displayName: "Shed", icon: "computer" },
     }),
   );
-  return <WorkflowEditor store={store} />;
+  return (
+    <ChromeFrame>
+      <WorkflowEditor store={store} active />
+    </ChromeFrame>
+  );
 }
 
 export function TypedValues() {
@@ -54,7 +63,9 @@ export function SavedDraft() {
         Fixture only · saved draft, published version and App catalog are
         simulated.
       </p>
-      <WorkflowEditor store={store} />
+      <ChromeFrame>
+        <WorkflowEditor store={store} active />
+      </ChromeFrame>
     </>
   );
 }
@@ -91,7 +102,13 @@ function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
         Fixture only · document and catalog replies are simulated; no
         publication or execution.
       </p>
-      <WorkflowEditor store={store} runPanel={() => <p>Run form fixture</p>} />
+      <ChromeFrame>
+        <WorkflowEditor
+          store={store}
+          runPanel={() => <p>Run form fixture</p>}
+          active
+        />
+      </ChromeFrame>
     </>
   );
 }
