@@ -176,15 +176,18 @@
 }
 
 .wf-layout {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
-.wf-pane-switch {
-  display: flex;
-  gap: var(--spacing-2xs);
-  padding: var(--spacing-2xs) 0;
+.wf-view-anchor {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
 }
 .wf-split {
   position: relative;
@@ -219,10 +222,6 @@
 }
 .wf-palette-entry {
   padding-block: var(--spacing-xs);
-}
-
-.wf-pane-switch[hidden] {
-  display: none;
 }
 
 .wf-version {

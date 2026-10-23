@@ -354,7 +354,7 @@
         "kind": "app",
         "app": "shed",
         "method": "run",
-        "methodDigest": "sha256:886a067e9faa7b0293849947637c1506ea02f43559eddb01d44dd3b56ae082c8",
+        "methodDigest": "sha256:9ad1927eb97e56bbcb57061652fc54c107ced496bef58c96b17f2c997db7355c",
         "values": {
           "command": {
             "from": {
@@ -527,7 +527,7 @@
         "kind": "app",
         "app": "shed",
         "method": "run",
-        "methodDigest": "sha256:886a067e9faa7b0293849947637c1506ea02f43559eddb01d44dd3b56ae082c8",
+        "methodDigest": "sha256:9ad1927eb97e56bbcb57061652fc54c107ced496bef58c96b17f2c997db7355c",
         "values": {
           "command": {
             "from": {

@@ -1,6 +1,5 @@
 import { describeAppError } from "@fungi.computer/agar/errors";
 import { FieldSet } from "@fungi.computer/caps/components/field";
-import { Badge } from "@fungi.computer/caps/components/badge";
 import { Button } from "@fungi.computer/caps/components/button";
 import {
   DataList,
@@ -107,9 +106,44 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       window.clearTimeout(timer);
     };
   }, [loading, failed, store, state.version, loadAttempt]);
+  const chooseVersion = (value: string) => {
+    setSelected(null);
+    setConfirmRestore(false);
+    state.setVersion(value === "draft" ? undefined : Number(value));
+  };
+  // Navigation describes the selected Item, not whether its content has loaded.
+  const navigation: ChromeParts = {
+    back: {
+      can: readOnly && !state.restoring,
+      go: () => {
+        chooseVersion("draft");
+      },
+    },
+    crumbs: [
+      {
+        id: "version",
+        label: readOnly ? `v${String(state.version)}` : "Draft",
+        siblings: [
+          { id: "draft", label: "Current draft" },
+          ...state.versions.map((item) => ({
+            id: String(item.version),
+            label:
+              `v${String(item.version)} · ${item.title} · ${versionRelativeTime(item.createdAt, now)}`.slice(
+                0,
+                80,
+              ),
+          })),
+        ],
+        select: (sibling) => {
+          if (sibling !== undefined && !state.restoring) chooseVersion(sibling);
+        },
+      },
+    ],
+  };
   if (!draft || !document)
     return (
       <main className="wf-pane-body">
+        <ChromeSlot active={active} parts={navigation} />
         <Status
           label={failed ? "Workflow could not be loaded" : "Loading workflow…"}
           tone={failed ? "error" : "neutral"}
@@ -430,39 +464,32 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       : issues.length
         ? `${String(issues.length)} issues`
         : "Valid";
-  const chooseVersion = (value: string) => {
-    setSelected(null);
-    setConfirmRestore(false);
-    state.setVersion(value === "draft" ? undefined : Number(value));
+  // Hide only healthy, settled labels. Pending/unsaved/error states retain
+  // visible explanations rather than reducing a refusal to an ambiguous dot.
+  let savedStatus: NonNullable<ChromeParts["status"]>[number] = {
+    id: "saved",
+    label: savedLabel,
+    tone: savedLabel === "Saved" ? "success" : "neutral",
   };
+  if (savedLabel === "Saved")
+    savedStatus = { ...savedStatus, presentation: "bead" };
+  let validStatus: NonNullable<ChromeParts["status"]>[number] = {
+    id: "valid",
+    label: validLabel,
+    tone: catalogUnavailable ? "neutral" : issues.length ? "error" : "success",
+  };
+  if (validLabel === "Valid")
+    validStatus = { ...validStatus, presentation: "bead" };
   const chromeParts: ChromeParts = {
-    crumbs: [
-      {
-        id: "version",
-        label: readOnly ? `v${String(state.version)}` : "Draft",
-        siblings: [
-          { id: "draft", label: "Current draft" },
-          ...state.versions.map((item) => ({
-            id: String(item.version),
-            label:
-              `v${String(item.version)} · ${item.title} · ${versionRelativeTime(item.createdAt, now)}`.slice(
-                0,
-                80,
-              ),
-          })),
-        ],
-        select: (sibling) => {
-          if (sibling !== undefined && !state.restoring) chooseVersion(sibling);
-        },
-      },
-    ],
+    ...navigation,
     primary: [
       ...(runPanel
         ? [
             {
               id: "run",
               label: "Run",
-              variant: "outline" as const,
+              icon: "play" as const,
+              variant: "ghost" as const,
               disabled: runVersion === undefined,
               run: () => {
                 setPane(pane === "run" ? "node" : "run");
@@ -501,25 +528,13 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
             ]
           : []),
     ],
-    status: [
-      { id: "saved", label: savedLabel, tone: "neutral" },
-      {
-        id: "valid",
-        label: validLabel,
-        tone: catalogUnavailable
-          ? "neutral"
-          : issues.length
-            ? "error"
-            : "success",
-      },
-    ],
+    status: [savedStatus, validStatus],
   };
   const notes = [
     state.historyError,
     state.restoreNotice,
     state.restoreError,
     publishError,
-    publishedVersion,
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
@@ -578,11 +593,6 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 {publishError}
               </p>
             ) : null}
-            {publishedVersion ? (
-              <Badge variant="quiet" role="status">
-                Published v{publishedVersion}
-              </Badge>
-            ) : null}
             {runPanel && runVersion === undefined ? (
               <p id={runHintId} className="wf-muted wf-bar-note">
                 Publish a version to run this workflow.
@@ -591,6 +601,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           </header>
         ) : null}
         <EditorPanes
+          active={active}
           pane={pane}
           reveal={reveal}
           palette={

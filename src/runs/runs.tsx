@@ -25,9 +25,9 @@ import type { Draft, DraftCatalog } from "../editor/draft-store.js";
 import type { WorkflowClient } from "../workflow-client.js";
 import { definitionAppIds } from "../../backend/catalog.js";
 import { useChrome } from "../chrome.js";
-import { ReviewDock, type ReadMedia } from "./review-dock.js";
+import { ReviewDock } from "./review-dock.js";
 import { NodeStatus } from "./node-status.js";
-import { OutputError } from "./output-preview.js";
+import { OutputError, type ReadMedia } from "./output-preview.js";
 import {
   runBeadState,
   runLatestLine,
@@ -366,7 +366,7 @@ export function Runs({
   client: WorkflowClient;
   workflowId?: string;
   selectedRun: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, workflowId: string) => void;
   readMedia?: ReadMedia;
   openIn?: OpenInApp;
 }) {
@@ -413,17 +413,23 @@ export function Runs({
     };
   }, [client, workflowId, selectedRun, attempt]);
   const chosen = items?.find((item) => item.runId === selectedRun);
+  // Resolve a run-only deep link using this list's existing metadata, without
+  // another lookup or a guessed workflow scope.
+  useEffect(() => {
+    if (chosen && workflowId === undefined)
+      onSelect(chosen.runId, chosen.workflowId);
+  }, [chosen, workflowId, onSelect]);
   // A person's own pick wins; otherwise the first run waiting on them, then the newest.
   const preferred =
     items?.find((item) => runSection(runs[item.runId]) === "needs-you") ??
     items?.[0];
   const selected = chosen ?? (compact ? undefined : preferred);
   useChrome("runs", {
-    crumbs: selected
+    crumbs: chosen
       ? [
           {
             id: "run",
-            label: `Run · ${versionRelativeTime(new Date(selected.startedAt).toISOString())}`,
+            label: `Run · ${versionRelativeTime(new Date(chosen.startedAt).toISOString())}`,
           },
         ]
       : [],
@@ -487,7 +493,7 @@ export function Runs({
                             selected?.runId === item.runId ? "page" : undefined
                           }
                           onClick={() => {
-                            onSelect(item.runId);
+                            onSelect(item.runId, item.workflowId);
                           }}
                           label={`${item.title ?? "Workflow title unavailable"}${item.version ? ` · v${String(item.version)}` : ""}`}
                           description={

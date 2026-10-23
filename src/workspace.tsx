@@ -1,41 +1,42 @@
 import type { HostUi } from "@fungi.computer/agar";
 import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@fungi.computer/caps/components/button";
+import { ActionRow } from "@fungi.computer/caps/components/action-row";
+import { DataList, DataRow } from "@fungi.computer/caps/components/data-list";
 import { useChrome, type ChromeCrumb } from "./chrome.js";
 import { WorkflowEditor } from "./editor/editor.js";
 import { emptyDraft } from "./editor/draft-store.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
 import { Runs } from "./runs/runs.js";
 import { RunWorkflow } from "./runs/run-workflow.js";
-import type { ReadMedia } from "./runs/review-dock.js";
+import type { ReadMedia } from "./runs/output-preview.js";
 import type { OpenInApp } from "./runs/run-timeline.js";
 import { Triggers } from "./triggers/triggers.js";
 import { Templates } from "./templates/templates.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
-const viewLabels = {
+const toolLabels = {
   runs: "Runs",
   editor: "Editor",
   triggers: "Triggers",
-  templates: "Templates",
 } as const;
-const isView = (value: string): value is keyof typeof viewLabels =>
-  Object.hasOwn(viewLabels, value);
+type Tool = keyof typeof toolLabels;
+export type WorkflowScope =
+  | { kind: "all-runs" | "templates" | "all-workflows" }
+  | { kind: "workflow"; workflowId: string };
 
 export function WorkflowWorkspace({
   client,
-  view,
-  onView,
+  initialScope = { kind: "all-runs" },
   readMedia,
   openIn,
   browserActions,
   openRequest,
 }: {
   client: WorkflowClient;
-  view: string;
-  onView: (view: string) => void;
+  initialScope?: WorkflowScope;
   readMedia?: ReadMedia;
   openIn?: OpenInApp;
   browserActions?: Pick<HostUi, "requestBrowserAction">;
@@ -44,10 +45,16 @@ export function WorkflowWorkspace({
   const [library, setLibrary] = useState<Awaited<
     ReturnType<WorkflowClient["listWorkflows"]>
   > | null>(null);
-  const [workflowId, setWorkflowId] = useState<string | null>(null);
+  const [scope, setScope] = useState<WorkflowScope>(initialScope);
+  const [tool, setTool] = useState<Tool>("editor");
+  // Window-local picker recency only. Back never reads this list.
+  const [recent, setRecent] = useState<readonly string[]>(() =>
+    initialScope.kind === "workflow" ? [initialScope.workflowId] : [],
+  );
+  const workflowId = scope.kind === "workflow" ? scope.workflowId : null;
+  // Keep the draft's autosave lifetime when navigating to another scope.
+  const [editorWorkflowId, setEditorWorkflowId] = useState(workflowId);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
-  /** Runs lists every workflow's runs until a workflow is chosen as the filter. */
-  const [filtered, setFiltered] = useState(false);
   const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +64,16 @@ export function WorkflowWorkspace({
     client: WorkflowClient;
     requestId: string;
   } | null>(null);
+  const choose = useCallback((id: string) => {
+    setScope({ kind: "workflow", workflowId: id });
+    setEditorWorkflowId(id);
+    setTool("editor");
+    setSelectedRun(null);
+    setRecent((current) =>
+      [id, ...current.filter((item) => item !== id)].slice(0, 12),
+    );
+    setAttempt((value) => value + 1);
+  }, []);
   useEffect(() => {
     if (openRequest?.kind !== "navigate") return;
     if (
@@ -67,9 +84,8 @@ export function WorkflowWorkspace({
     const run = openRequest.params.find((param) => param.key === "run")?.value;
     if (run !== undefined && run !== "") {
       handledRequest.current = { client, requestId: openRequest.requestId };
+      setScope({ kind: "all-runs" });
       setSelectedRun(run);
-      setFiltered(false);
-      onView("runs");
       return;
     }
     const target = workflowIdSchema.safeParse(
@@ -77,10 +93,8 @@ export function WorkflowWorkspace({
     );
     if (!target.success) return;
     handledRequest.current = { client, requestId: openRequest.requestId };
-    setWorkflowId(target.data);
-    setSelectedRun(null);
-    onView("editor");
-  }, [client, openRequest, onView]);
+    choose(target.data);
+  }, [client, openRequest, choose]);
   useEffect(() => {
     let active = true;
     setError(null);
@@ -95,12 +109,6 @@ export function WorkflowWorkspace({
       if (!active) return;
       setSlow(false);
       setLibrary(items);
-      setWorkflowId(
-        (current) =>
-          current ??
-          (Array.isArray(items) ? items.at(0)?.workflowId : null) ??
-          null,
-      );
     };
     void client
       .listWorkflows()
@@ -122,15 +130,16 @@ export function WorkflowWorkspace({
       window.clearTimeout(timer);
     };
   }, [client, attempt]);
-  const store = useMemo(
-    () => (workflowId ? rowDraftStore(client, workflowId) : null),
-    [client, workflowId],
-  );
-  const choose = (id: string) => {
-    setWorkflowId(id);
+  const refreshLibrary = useCallback(() => {
     setAttempt((value) => value + 1);
-    onView("editor");
-  };
+  }, []);
+  const store = useMemo(
+    () =>
+      editorWorkflowId
+        ? rowDraftStore(client, editorWorkflowId, refreshLibrary)
+        : null,
+    [client, editorWorkflowId, refreshLibrary],
+  );
   async function create() {
     setBusy(true);
     setError(null);
@@ -146,54 +155,69 @@ export function WorkflowWorkspace({
   }
   const workflows = Array.isArray(library) ? library : [];
   const title = workflows.find((item) => item.workflowId === workflowId)?.title;
-  const goView = (next: string) => {
-    if (!isView(next)) return;
-    if (next === "runs") setFiltered(true);
-    onView(next);
-  };
   const home = () => {
-    setFiltered(false);
+    setScope({ kind: "all-runs" });
     setSelectedRun(null);
-    onView("runs");
   };
-  const viewCrumb = (
-    siblings: readonly (keyof typeof viewLabels)[],
-    unfiltered = false,
-  ) => ({
-    id: "view",
-    label: isView(view) ? viewLabels[view] : view,
-    siblings: siblings.map((id) => ({ id, label: viewLabels[id] })),
-    select: (sibling?: string) => {
-      if (sibling === undefined) return;
-      if (sibling === "runs" && unfiltered) home();
-      else goView(sibling);
-    },
-  });
   const trellis: ChromeCrumb = { id: "home", label: "Trellis", select: home };
-  let crumbs: readonly ChromeCrumb[];
-  if (view === "templates")
-    crumbs = [trellis, { id: "view", label: "Templates" }];
-  else if (view === "runs" && !filtered)
-    crumbs = [
-      trellis,
-      viewCrumb(["runs", "editor", "triggers", "templates"], true),
-    ];
-  else
-    crumbs = [
-      trellis,
-      {
-        id: "workflow",
-        label: title ?? "Choose a workflow",
-        siblings: workflows.map((item) => ({
-          id: item.workflowId,
-          label: item.title,
-        })),
-        select: (sibling?: string) => {
-          if (sibling !== undefined) setWorkflowId(sibling);
-        },
-      },
-      viewCrumb(["editor", "runs", "triggers", "templates"]),
-    ];
+  const scopeCrumb: ChromeCrumb = {
+    id: "scope",
+    label:
+      scope.kind === "workflow"
+        ? (title ?? workflowId ?? "Workflow")
+        : scope.kind === "templates"
+          ? "Templates"
+          : scope.kind === "all-workflows"
+            ? "All workflows"
+            : "All runs",
+    siblings: [
+      { id: "all-runs", label: "All runs" },
+      { id: "templates", label: "Templates" },
+      ...recent.flatMap((id) => {
+        const item = workflows.find((item) => item.workflowId === id);
+        // One-character namespace preserves Agar's 64-character id bound.
+        return item ? [{ id: `w${id}`, label: item.title }] : [];
+      }),
+      { id: "all-workflows", label: "All workflows…" },
+      { id: "new", label: "New workflow" },
+    ],
+    select: (id) => {
+      if (id === undefined) return;
+      if (id === "new") {
+        if (!busy) void create();
+        return;
+      }
+      if (id === "all-runs" || id === "templates" || id === "all-workflows") {
+        setScope({ kind: id });
+        setSelectedRun(null);
+        return;
+      }
+      const item = workflows.find((item) => `w${item.workflowId}` === id);
+      if (item) choose(item.workflowId);
+    },
+  };
+  const crumbs: readonly ChromeCrumb[] = [
+    trellis,
+    scopeCrumb,
+    ...(scope.kind === "workflow"
+      ? [
+          {
+            id: "tool",
+            label: toolLabels[tool],
+            siblings: Object.entries(toolLabels).map(([id, label]) => ({
+              id,
+              label,
+            })),
+            select: (id?: string) => {
+              if (id !== "editor" && id !== "runs" && id !== "triggers") return;
+              setTool(id);
+              setSelectedRun(null);
+            },
+          },
+        ]
+      : []),
+  ];
+  const editing = scope.kind === "workflow" && tool === "editor";
   const share = browserActions
     ? [
         {
@@ -233,10 +257,12 @@ export function WorkflowWorkspace({
       ...share,
     ],
     back: {
-      can: view !== "runs" || selectedRun !== null,
+      can: scope.kind !== "all-runs" || selectedRun !== null,
       go: () => {
-        if (view === "runs") setSelectedRun(null);
-        else onView("runs");
+        if (selectedRun !== null) setSelectedRun(null);
+        else if (scope.kind === "workflow" && tool !== "editor")
+          setTool("editor");
+        else home();
       },
     },
   });
@@ -268,80 +294,87 @@ export function WorkflowWorkspace({
           )}
         </p>
       ) : null}
-      <div className="wf-editor-host" hidden={view !== "editor"}>
-        {store && workflowId ? (
+      {scope.kind === "all-workflows" ? (
+        <main className="wf-page">
+          <h1>All workflows</h1>
+          {!library ? (
+            <p role="status">
+              {slow
+                ? "Loading is taking longer than usual. You can keep waiting or retry."
+                : "Loading workflows…"}
+              {slow ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setAttempt((value) => value + 1);
+                  }}
+                >
+                  Retry
+                </Button>
+              ) : null}
+            </p>
+          ) : null}
+          {library && !Array.isArray(library) ? (
+            <p role="status">Finding your workflows…</p>
+          ) : null}
+          {Array.isArray(library) && workflows.length === 0 ? (
+            <p>Create your first workflow</p>
+          ) : null}
+          <DataList aria-label="Workflows">
+            {workflows.map((item) => (
+              <DataRow key={item.workflowId}>
+                <ActionRow
+                  data-workflow-id={item.workflowId}
+                  label={item.title}
+                  onClick={() => {
+                    choose(item.workflowId);
+                  }}
+                />
+              </DataRow>
+            ))}
+          </DataList>
+        </main>
+      ) : null}
+      <div className="wf-editor-host" hidden={!editing}>
+        {store && editorWorkflowId ? (
           <WorkflowEditor
-            key={workflowId}
+            key={editorWorkflowId}
             store={store}
-            active={view === "editor"}
+            active={editing}
             runPanel={(version) => (
               <RunWorkflow
                 key={version}
                 client={client}
-                workflowId={workflowId}
+                workflowId={editorWorkflowId}
                 version={version}
                 onRun={(id) => {
                   setSelectedRun(id);
-                  onView("runs");
+                  setTool("runs");
                 }}
               />
             )}
           />
-        ) : (
-          <main className="wf-page">
-            <h1>
-              {library && !Array.isArray(library)
-                ? error
-                  ? "Workflow list unavailable"
-                  : "Finding your workflows…"
-                : library
-                  ? "Create your first workflow"
-                  : error
-                    ? "Workflow list unavailable"
-                    : "Loading workflows…"}
-            </h1>
-            {library && !Array.isArray(library) ? (
-              <p role="status">
-                {error
-                  ? "Your saved workflows are still in Git. The list could not be refreshed."
-                  : "Your saved workflows will appear here shortly."}
-              </p>
-            ) : library ? (
-              <p>Start with a new workflow or choose a template.</p>
-            ) : !error ? (
-              <p role="status">
-                {slow
-                  ? "Loading is taking longer than usual. You can keep waiting or retry."
-                  : "Your workflow list will appear here."}
-                {slow ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setAttempt((value) => value + 1);
-                    }}
-                  >
-                    Retry
-                  </Button>
-                ) : null}
-              </p>
-            ) : null}
-          </main>
-        )}
+        ) : null}
       </div>
-      {view === "runs" ? (
+      {scope.kind === "all-runs" ||
+      (scope.kind === "workflow" && tool === "runs") ? (
         <Runs
           client={client}
-          workflowId={filtered ? (workflowId ?? undefined) : undefined}
+          workflowId={workflowId ?? undefined}
           selectedRun={selectedRun}
-          onSelect={setSelectedRun}
+          onSelect={(id, owner) => {
+            choose(owner);
+            setTool("runs");
+            setSelectedRun(id);
+          }}
           readMedia={readMedia}
           openIn={openIn}
         />
       ) : null}
-      {view === "triggers" ? (
+      {scope.kind === "workflow" && tool === "triggers" ? (
         <Triggers client={client} workflowId={workflowId} />
       ) : null}
-      {view === "templates" ? (
+      {scope.kind === "templates" ? (
         <Templates client={client} onUse={choose} />
       ) : null}
     </>

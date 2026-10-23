@@ -1,9 +1,10 @@
 import * as z from "zod";
 import { useEffect, useState } from "react";
 import type { Json } from "@fungi.computer/braid";
-import type { ReadMedia } from "./review-dock.js";
 import type { RunStep } from "./run-state.js";
 import { versionRelativeTime } from "../history/relative-time.js";
+
+export type ReadMedia = (path: string, signal: AbortSignal) => Promise<Blob>;
 
 const mediaSchema = z.object({
   destination: z.object({ path: z.string().startsWith("/").min(2).max(4096) }),
@@ -45,7 +46,7 @@ export function MediaThumb({
   readMedia,
 }: {
   media: Readonly<{ path: string; format: "fungi:image" | "fungi:video" }>;
-  readMedia?: ReadMedia;
+  readMedia?: ReadMedia | undefined;
 }) {
   const { preview } = useMediaPreview(media.path, readMedia);
   return (
@@ -66,8 +67,8 @@ export function OutputPreview({
   readMedia,
 }: {
   value: Json;
-  format?: string;
-  readMedia?: ReadMedia;
+  format?: string | undefined;
+  readMedia?: ReadMedia | undefined;
 }) {
   const media = mediaSchema.safeParse(value);
   const text = z.string().safeParse(value);
@@ -121,7 +122,7 @@ export function StepOutput({
 }: {
   step: RunStep;
   formats?: Readonly<Record<string, string | undefined>>;
-  readMedia?: ReadMedia;
+  readMedia?: ReadMedia | undefined;
 }) {
   const review = "reviewOutput" in step ? step.reviewOutput : undefined;
   const recordedAt =

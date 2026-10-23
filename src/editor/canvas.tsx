@@ -1,6 +1,6 @@
 import { useCatalogLoading } from "./catalog-loading.js";
 import { GraphResults, nodeResultsFor } from "./graph-results.js";
-import type { ReadMedia } from "../runs/review-dock.js";
+import type { ReadMedia } from "../runs/output-preview.js";
 import type { RunStep } from "../runs/run-state.js";
 import { GraphBody } from "./graph-body.js";
 import {

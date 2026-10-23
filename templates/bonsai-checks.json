@@ -186,7 +186,7 @@
         "kind": "app",
         "app": "shed",
         "method": "runCommand",
-        "methodDigest": "sha256:cfa2e8beeacd440ccc745525898d6b831049a831a2b9e479dd3506f06c42c457",
+        "methodDigest": "sha256:7f5d5f84e8d75d0ff2aa36380ef218c12e20db0e9d07316e138c8fb71cb4a58b",
         "values": {
           "command": {
             "from": {
@@ -207,132 +207,103 @@
       {
         "id": "result",
         "kind": "code",
-        "source": "const result = await env.INPUT.read({});\nconst output = \"output\" in result ? result.output : null;\nconst passed = result.status === \"succeeded\" && output !== null && output.status === \"completed\" && output.exitCode === 0;\nconst summary = output === null ? JSON.stringify(result) : [output.stdout, output.stderr, output.truncated ? \"[output truncated]\" : \"\"].filter(Boolean).join(\"\\n\");\nreturn { status: passed ? \"passed\" : \"failed\", summary: summary.slice(-4000) };\n",
+        "source": "const result = await env.INPUT.read({});\nconst passed = !(\"error\" in result) && result.exitCode === 0;\nconst summary = \"error\" in result ? result.error : [result.stdout, result.stderr, result.stdoutTruncated || result.stderrTruncated ? \"[output truncated]\" : \"\"].filter(Boolean).join(\"\\n\");\nreturn { status: passed ? \"passed\" : \"failed\", summary: summary.slice(-4000) };\n",
         "input": {
           "anyOf": [
             {
               "type": "object",
               "properties": {
-                "requestId": {
+                "stdout": {
                   "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  "maxLength": 65538
                 },
-                "status": {
+                "stderr": {
                   "type": "string",
-                  "enum": [
-                    "accepted",
-                    "running",
-                    "succeeded",
-                    "failed",
-                    "unknown",
-                    "expired"
-                  ]
+                  "maxLength": 65538
                 },
-                "output": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": ["completed", "failed", "cancelled"]
-                        },
-                        "exitCode": {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        "stdout": {
-                          "type": "string",
-                          "maxLength": 65538
-                        },
-                        "stderr": {
-                          "type": "string",
-                          "maxLength": 65538
-                        },
-                        "truncated": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "status",
-                        "exitCode",
-                        "stdout",
-                        "stderr",
-                        "truncated"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
+                "exitCode": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "stdoutTruncated": {
+                  "type": "boolean"
+                },
+                "stderrTruncated": {
+                  "type": "boolean"
                 }
               },
-              "required": ["requestId", "status", "output"],
+              "required": [
+                "stdout",
+                "stderr",
+                "exitCode",
+                "stdoutTruncated",
+                "stderrTruncated"
+              ],
               "additionalProperties": false
             },
             {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "enum": [
-                        "not_granted",
-                        "revoked",
-                        "grantor_lost_authority",
-                        "unavailable",
-                        "invalid",
-                        "invalid_path",
-                        "too_large",
-                        "conflict",
-                        "not_found"
-                      ]
-                    }
-                  },
-                  "required": ["error"],
-                  "additionalProperties": false
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "const": "attachment_budget_exceeded"
-                    },
-                    "kind": {
-                      "type": "string",
-                      "enum": ["exec", "write"]
-                    },
-                    "retryAfterMs": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 86400000
-                    }
-                  },
-                  "required": ["error", "kind", "retryAfterMs"],
-                  "additionalProperties": false
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "const": "timeout"
-                    },
-                    "requestId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
-                    }
-                  },
-                  "required": ["error", "requestId"],
-                  "additionalProperties": false
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": [
+                    "not_granted",
+                    "revoked",
+                    "grantor_lost_authority",
+                    "unavailable",
+                    "invalid",
+                    "invalid_path",
+                    "too_large",
+                    "conflict",
+                    "not_found"
+                  ]
                 }
-              ]
+              },
+              "required": ["error"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "const": "attachment_budget_exceeded"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["exec", "write"]
+                },
+                "retryAfterMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 86400000
+                }
+              },
+              "required": ["error", "kind", "retryAfterMs"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "const": "timeout"
+                }
+              },
+              "required": ["error"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "const": "output_unavailable"
+                }
+              },
+              "required": ["error"],
+              "additionalProperties": false
             }
           ]
         },

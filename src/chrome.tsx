@@ -44,6 +44,7 @@ function crumbData(crumb: ChromeCrumb): AppCrumb {
 }
 function commandData(item: ChromeCommand): AppHeaderCommand {
   let data: AppHeaderCommand = { id: item.id, label: item.label };
+  if (item.icon !== undefined) data = { ...data, icon: item.icon };
   if (item.variant !== undefined) data = { ...data, variant: item.variant };
   if (item.tone !== undefined) data = { ...data, tone: item.tone };
   if (item.disabled !== undefined) data = { ...data, disabled: item.disabled };
@@ -83,7 +84,7 @@ export function ChromeProvider({
   const crumbs = all.flatMap((part) => part.crumbs ?? []);
   const primary = all.flatMap((part) => part.primary ?? []);
   const menu = all.flatMap((part) => part.menu ?? []);
-  const back = all.find((part) => part.back !== undefined)?.back;
+  const back = [...all].reverse().find((part) => part.back?.can === true)?.back;
   const published = {
     canGoBack: back?.can === true,
     onBack: () => {

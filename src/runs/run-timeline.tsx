@@ -1,3 +1,4 @@
+import "./run-timeline.css";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@fungi.computer/caps/components/button";
@@ -5,8 +6,7 @@ import { Disclosure } from "@fungi.computer/caps/components/disclosure";
 import { Monogram } from "@fungi.computer/caps/components/monogram";
 import { isSigilName, Sigil } from "@fungi.computer/sigils";
 import { NodeStatus } from "./node-status.js";
-import { MediaThumb, StepOutput } from "./output-preview.js";
-import type { ReadMedia } from "./review-dock.js";
+import { MediaThumb, StepOutput, type ReadMedia } from "./output-preview.js";
 import { formatDuration, type TimelineItem } from "./timeline-items.js";
 
 /** Open another App at what a step produced. */
@@ -38,8 +38,8 @@ function Step({
   item: TimelineItem;
   open: boolean;
   onToggle: () => void;
-  readMedia?: ReadMedia;
-  openIn?: OpenInApp;
+  readMedia?: ReadMedia | undefined;
+  openIn?: OpenInApp | undefined;
 }) {
   const [openError, setOpenError] = useState<Error | null>(null);
   const target = item.open;
@@ -114,8 +114,8 @@ export function RunTimeline({
   openIn,
 }: {
   items: readonly TimelineItem[];
-  readMedia?: ReadMedia;
-  openIn?: OpenInApp;
+  readMedia?: ReadMedia | undefined;
+  openIn?: OpenInApp | undefined;
 }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [all, setAll] = useState(false);

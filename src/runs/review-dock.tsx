@@ -5,9 +5,8 @@ import { useState } from "react";
 import { Button } from "@fungi.computer/caps/components/button";
 import type { WorkflowClient } from "../workflow-client.js";
 import { stepPosition, type Review } from "./run-state.js";
-import { OutputPreview } from "./output-preview.js";
+import { OutputPreview, type ReadMedia } from "./output-preview.js";
 import { NodeStatus } from "./node-status.js";
-export type ReadMedia = (path: string, signal: AbortSignal) => Promise<Blob>;
 /** The question a run is waiting on, docked where a composer sits. */
 export function ReviewDock({
   runId,

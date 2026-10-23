@@ -54,10 +54,14 @@ function publicationFailure(
   });
 }
 
-/** Draft revisions belong to the App row; published commits remain immutable versions. */
+/**
+ * Draft revisions belong to the App row; published commits remain immutable.
+ * onSaved invalidates workspace metadata only after a committed save/restore.
+ */
 export function rowDraftStore(
   client: WorkflowClient,
   workflowId: string,
+  onSaved?: () => void,
 ): DraftStore {
   let discovery: DraftCatalog = { catalog: {}, appDisplay: {}, palette: {} };
   let pendingPublication: string | null = null;
@@ -169,6 +173,7 @@ export function rowDraftStore(
           ),
         };
       }
+      onSaved?.();
       return {
         status: "saved",
         document: document(draft, result.revision),
@@ -201,6 +206,7 @@ export function rowDraftStore(
           ),
         };
       }
+      onSaved?.();
       return {
         status: "saved",
         document: document(copiedDraft(source), result.revision),

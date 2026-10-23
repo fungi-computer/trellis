@@ -4,7 +4,14 @@ import {
   useMaosaicoItem,
   useMaosaicoLayout,
 } from "@fungi.computer/maosaico";
-import { Button } from "@fungi.computer/caps/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+} from "@fungi.computer/caps/components/dropdown-menu";
+import { useChrome } from "../chrome.js";
 import { IconButton } from "@fungi.computer/caps/components/icon-button";
 import { ResizeHandle } from "@fungi.computer/caps/components/resize-handle";
 import {
@@ -31,14 +38,37 @@ export function EditorPanes({
   inspector,
   pane,
   reveal,
+  active,
 }: {
   palette: ReactNode;
   canvas: ReactNode;
   inspector: ReactNode;
   pane: EditorPane;
   reveal: number;
+  active: boolean;
 }) {
-  const navigation = useRef<HTMLElement>(null);
+  const layout = useRef<HTMLDivElement>(null);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!active) setMenuOpen(false);
+  }, [active]);
+  useChrome(
+    "panes",
+    active
+      ? {
+          menu: [
+            {
+              id: "view",
+              label: "View",
+              run: () => {
+                setMenuOpen((current) => !current);
+              },
+            },
+          ],
+        }
+      : null,
+  );
   const [collapsed, setCollapsed] = useState<PaneId[]>([]);
   const [zoomed, setZoomed] = useState<PaneId | null>(null);
   const [selected, setSelected] = useState<PaneId>("palette");
@@ -72,13 +102,15 @@ export function EditorPanes({
           document.activeElement !== document.body
         )
           return;
-        navigation.current?.parentElement
+        layout.current
           ?.querySelector<HTMLButtonElement>(`[data-tile="${id}"] button`)
           ?.focus();
       });
   };
   const participates = (id: PaneId) =>
     !collapsed.includes(id) && (!narrow || selected === id);
+  const visible = (id: PaneId) =>
+    participates(id) && (zoomed === null || zoomed === id);
   const controls = (id: PaneId) => ({
     id,
     title: id === "node" && pane === "run" ? "Run workflow" : titles[id],
@@ -94,49 +126,35 @@ export function EditorPanes({
         (item) => item !== id && !collapsed.includes(item),
       );
       if (next) setSelected(next);
-      requestAnimationFrame(() =>
-        navigation.current
-          ?.querySelector<HTMLButtonElement>(`[data-pane-choice="${id}"]`)
-          ?.focus(),
-      );
+      requestAnimationFrame(() => layout.current?.focus());
     },
   });
   return (
-    <div className="wf-layout">
-      <nav
-        ref={navigation}
-        className="wf-pane-switch"
-        aria-label="Editor panes"
-        hidden={!narrow && collapsed.length === 0}
-      >
-        {(["palette", "canvas", "node"] satisfies PaneId[])
-          .filter((id) => narrow || collapsed.includes(id))
-          .map((id) => (
-            <Button
-              key={id}
-              data-pane-choice={id}
-              size="xs"
-              variant={
-                narrow && selected === id && !collapsed.includes(id)
-                  ? "outline"
-                  : "ghost"
-              }
-              aria-label={
-                collapsed.includes(id) ? `Expand ${titles[id]}` : titles[id]
-              }
-              aria-pressed={
-                narrow
-                  ? selected === id && !collapsed.includes(id)
-                  : !collapsed.includes(id)
-              }
-              onClick={() => {
-                open(id);
-              }}
-            >
-              {titles[id]}
-            </Button>
-          ))}
-      </nav>
+    <div className="wf-layout" ref={layout} tabIndex={-1}>
+      <span className="wf-view-anchor" ref={anchor} aria-hidden />
+      {active ? (
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuPortal container={document.body}>
+            <DropdownMenuPositioner anchor={anchor} align="end" side="bottom">
+              <DropdownMenuPopup aria-label="Editor panes">
+                {(["palette", "canvas", "node"] satisfies PaneId[]).map(
+                  (id) => (
+                    <DropdownMenuItem
+                      key={id}
+                      onSelect={() => {
+                        if (visible(id)) controls(id).onCollapse();
+                        else open(id);
+                      }}
+                    >
+                      {visible(id) ? "Hide" : "Show"} {titles[id]}
+                    </DropdownMenuItem>
+                  ),
+                )}
+              </DropdownMenuPopup>
+            </DropdownMenuPositioner>
+          </DropdownMenuPortal>
+        </DropdownMenu>
+      ) : null}
       <Split
         main="palette"
         size={232}

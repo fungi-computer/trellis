@@ -1,6 +1,6 @@
 import { applyTheme, getTheme } from "@fungi.computer/stipe/theme";
-import { connectApp, type AppRoot } from "@fungi.computer/agar";
-import { useAppContext } from "@fungi.computer/agar/react";
+import { AppError, connectApp, type AppRoot } from "@fungi.computer/agar";
+import { useAppContext, type AppMountState } from "@fungi.computer/agar/react";
 import { useEffect, useMemo, useState } from "react";
 import { ChromeProvider } from "./chrome.js";
 import { WorkflowWorkspace } from "./workspace.js";
@@ -8,7 +8,7 @@ import { openWorkflows } from "./workflow-client.js";
 import { appMethods } from "@fungi.computer/agar/backend";
 import { readComputerFile } from "@fungi.computer/agar/computer";
 import { openApp } from "@fungi.computer/agar/apps";
-import type { ReadMedia } from "./runs/review-dock.js";
+import type { ReadMedia } from "./runs/output-preview.js";
 import type { OpenInApp } from "./runs/run-timeline.js";
 
 const ENDED: ReadonlySet<string> = new Set([
@@ -23,9 +23,12 @@ export function WorkflowApp({
 }: {
   connect?: typeof connectApp;
 }) {
-  const [app, setApp] = useState<AppRoot | null>(null);
+  const [connection, setConnection] = useState<AppMountState>(() => ({
+    app: null,
+    status: window.parent === window ? "standalone" : "connecting",
+  }));
   useEffect(() => {
-    if (window.parent === window || !document.referrer) return;
+    if (window.parent === window) return;
     const controller = new AbortController();
     const standaloneTheme = getTheme();
     const restoreTheme = () => {
@@ -41,7 +44,7 @@ export function WorkflowApp({
       releaseLifecycle = undefined;
     };
     connect({
-      expectedHostOrigin: new URL(document.referrer).origin,
+      host: "parent",
       signal: controller.signal,
     }).then(
       (connected) => {
@@ -56,14 +59,25 @@ export function WorkflowApp({
           if (!ENDED.has(state)) return;
           releaseSubscriptions();
           restoreTheme();
-          setApp(null);
+          setConnection({ app: null, status: "ended" });
         });
-        setApp(connected);
+        setConnection({ app: connected, status: "live" });
       },
       (cause: unknown) => {
-        if (!controller.signal.aborted)
-          console.error("Workflow App host connection failed", cause);
-        setApp(null);
+        if (controller.signal.aborted) return;
+        console.error("Workflow App host connection failed", cause);
+        setConnection({
+          app: null,
+          status: "not-hosted",
+          error:
+            cause instanceof AppError
+              ? cause
+              : new AppError("The Workflow App host is unavailable", {
+                  cause,
+                  code: "HOST_FAILURE",
+                  retryable: true,
+                }),
+        });
       },
     );
     return () => {
@@ -73,12 +87,20 @@ export function WorkflowApp({
       restoreTheme();
     };
   }, [connect]);
-  return <WorkflowView app={app} />;
+  return (
+    <>
+      {connection.status === "not-hosted" && (
+        <p role="alert">
+          The App host did not connect. Reopen Trellis through your Team.
+        </p>
+      )}
+      <WorkflowView app={connection.app} />
+    </>
+  );
 }
 
 /** The connected App surface, also used by the local method-transport proof. */
 export function WorkflowView({ app }: { app: AppRoot | null }) {
-  const [view, setView] = useState("runs");
   const openRequest = useAppContext(app)?.openRequest;
   const client = useMemo(
     () =>
@@ -113,8 +135,6 @@ export function WorkflowView({ app }: { app: AppRoot | null }) {
           {client && app ? (
             <WorkflowWorkspace
               client={client}
-              view={view}
-              onView={setView}
               readMedia={readMedia}
               openIn={openIn}
               browserActions={app.ui}

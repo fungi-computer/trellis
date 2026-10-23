@@ -30,6 +30,22 @@ Workflows, and its steps call the same App methods your agents use.
   Prints with a review per beat) and Storyboard + Save to git.
 - **Export**, **Import** and **Fork** workflows as JSON.
 
+### Build on merge
+
+Bonsai's accepted-main Git lifecycle requests this retained template through
+**WORKFLOWS.runGraph** for an already registered repository. The input is the
+registered App ID, the exact accepted Git revision and the target installation
+name; the Bonsai binding is the live calling installation. The template's
+published identity is pinned to that caller's Release source revision.
+
+The three steps are **build → verify → install**, with result cards.
+Verification waits for the build's boot gate, decodes the recorded Release and
+checks its source revision before exposing it to installation. Failed builds and
+mismatched Releases stop there. Installation requires Workflow-owned authority;
+ordinary App-origin calls do not receive an exemption. This template contains no
+review step or review configuration. New permissions still require owner consent
+and must preserve the running Release.
+
 <img alt="The Trellis editor in the light theme, with a Bonsai Repos.list step and a Workflow input on the canvas" src="docs/media/editor-light.png">
 
 ## Get it

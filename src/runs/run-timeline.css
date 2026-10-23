@@ -1,0 +1,46 @@
+/* Steps are Parakeet call rows (Caps Disclosure + Status) at body size. */
+.wf-timeline {
+  --caps-disclosure-font-size: var(--text-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.wf-step {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+  padding-block: var(--spacing-2xs);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-base-content) 8%, transparent);
+}
+/* Muted details read at the row's own size, as in the tool timeline. */
+.wf-timeline .wf-muted {
+  font-size: inherit;
+  color: color-mix(in oklab, var(--color-base-content) 62%, transparent);
+}
+/* The quiet "Open in <App>" action trails its row, outside the toggle; the
+   action column is reserved on every row so beads line up. */
+.wf-step-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+.wf-step-row[data-open] {
+  align-items: start;
+}
+.wf-step-open {
+  justify-self: end;
+}
+@media (max-width: 720px) {
+  /* A phone keeps the title whole: the action sits under it, no thumbnail. */
+  .wf-step-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wf-step-open {
+    justify-self: start;
+    margin-inline-start: var(--spacing-xl);
+  }
+}
