@@ -1,5 +1,12 @@
 # @fungi.computer/trellis
 
+## 0.2.1
+
+### Patch Changes
+
+- @fungi.computer/braid@0.2.1
+  - @fungi.computer/workflows-wire@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
