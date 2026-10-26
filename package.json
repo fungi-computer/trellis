@@ -1,6 +1,6 @@
 {
   "name": "@fungi.computer/trellis",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "scripts": {
     "build": "vite build && tsc -p backend/tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit",
@@ -165,6 +165,9 @@
     "dist/shared",
     "backend",
     "shared",
+    "src/runs",
+    "src/history/relative-time.ts",
+    "templates/bonsai-build-on-merge.json",
     "README.md",
     "LICENSE"
   ],

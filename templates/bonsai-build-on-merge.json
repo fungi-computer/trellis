@@ -38,7 +38,7 @@
         "kind": "app",
         "app": "bonsai",
         "method": "apps.build",
-        "methodDigest": "sha256:7acacb662de327c6ee7f4f07210bf63d174c457dc0032be529542df76314829f",
+        "methodDigest": "sha256:9be16b868eec164c504a30d37dd3739461fc33bf721699e49566ac2126f0a7fb",
         "values": {
           "appId": {
             "from": {

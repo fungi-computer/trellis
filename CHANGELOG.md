@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.2.3
+
+### Patch Changes
+
+- Changes since 0.2.2:
+
+  - fix(oyster): ship starter dependencies and continue failed installs
+  - fix(oyster): bound builder failures and interrupt lost builds
+
 ## 0.2.2
 
 ### Patch Changes
