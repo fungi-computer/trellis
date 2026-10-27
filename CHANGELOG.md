@@ -1,5 +1,29 @@
 # @fungi.computer/trellis
 
+## 0.3.0
+
+### Minor Changes
+
+- Changes since 0.2.3:
+
+  - feat(prints): choose video frame roles and audio from the model's documented
+    capabilities
+  - fix(trellis): repin the Prints catalog fixture to getOutput's typed request
+  - fix(trellis): repin Storyboard templates and Prints catalog to the
+    characters declaration
+  - feat(prints): enforce a documented prompt limit per model
+  - fix(oyster): ship starter dependencies and continue failed installs
+  - fix(oyster): bound builder failures and interrupt lost builds
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.4.0
+  - @fungi.computer/caps@0.3.1
+  - @fungi.computer/braid@0.2.3
+  - @fungi.computer/workflows-wire@0.2.3
+
 ## 0.2.3
 
 ### Patch Changes
