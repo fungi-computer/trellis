@@ -138,6 +138,7 @@ export function WorkflowView({ app }: { app: AppRoot | null }) {
               readMedia={readMedia}
               openIn={openIn}
               browserActions={app.ui}
+              permissions={app.ui}
               openRequest={openRequest}
             />
           ) : (

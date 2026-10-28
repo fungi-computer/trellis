@@ -1,5 +1,31 @@
 # @fungi.computer/trellis
 
+## 0.4.0
+
+### Minor Changes
+
+- Changes since 0.3.0:
+
+  - fix(prints): run panels one after another so none outlives its deadline
+  - fix(prints): steer the panel recipe to the default model and a results array
+  - fix(trellis): recognise the Git refusal as it crosses the App's RPC
+  - fix(trellis): ask for Git access instead of failing the library read
+  - fix(prints): say which result generateImage's read-back returns
+  - feat(grove): show a Prints panel in chat with Open in Prints
+  - fix(prints): keep the generateImage description under the Mycelium operation
+    limit
+  - fix(prints): say an unsaved @word stays plain text in generateImage
+  - feat(prints): let Agents list saved characters and styles
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.5.0
+  - @fungi.computer/caps@0.4.0
+  - @fungi.computer/braid@0.2.4
+  - @fungi.computer/workflows-wire@0.2.4
+
 ## 0.3.0
 
 ### Minor Changes

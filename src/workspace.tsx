@@ -1,4 +1,5 @@
 import type { HostUi } from "@fungi.computer/agar";
+import * as z from "zod";
 import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@fungi.computer/caps/components/button";
@@ -17,6 +18,11 @@ import { Templates } from "./templates/templates.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
+/**
+ * A host refusal for an ungranted capability. It crosses the App's RPC as a
+ * plain Error carrying the host AppError's own `code`, never as an AppError.
+ */
+const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
 const toolLabels = {
   runs: "Runs",
   editor: "Editor",
@@ -33,6 +39,7 @@ export function WorkflowWorkspace({
   readMedia,
   openIn,
   browserActions,
+  permissions,
   openRequest,
 }: {
   client: WorkflowClient;
@@ -40,6 +47,8 @@ export function WorkflowWorkspace({
   readMedia?: ReadMedia;
   openIn?: OpenInApp;
   browserActions?: Pick<HostUi, "requestBrowserAction">;
+  /** The host's permission consent; the library needs approved Git access. */
+  permissions?: Pick<HostUi, "requestAppPermissions">;
   openRequest?: AppOpenRequest | null;
 }) {
   const [library, setLibrary] = useState<Awaited<
@@ -57,6 +66,9 @@ export function WorkflowWorkspace({
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  // Git access is asked for in use, never at install: until the owner
+  // approves it the library cannot be read, which is not a failure.
+  const [needsGit, setNeedsGit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
@@ -98,6 +110,7 @@ export function WorkflowWorkspace({
   useEffect(() => {
     let active = true;
     setError(null);
+    setNeedsGit(false);
     setSlow(false);
     const timer = window.setTimeout(() => {
       if (active) setSlow(true);
@@ -120,7 +133,9 @@ export function WorkflowWorkspace({
       })
       .catch((cause: unknown) => {
         window.clearTimeout(timer);
-        if (active)
+        if (!active) return;
+        if (capabilityDenied.safeParse(cause).success) setNeedsGit(true);
+        else
           setError(
             new Error("The workflow library could not be updated.", { cause }),
           );
@@ -279,6 +294,33 @@ export function WorkflowWorkspace({
           onDialog={setShareDialog}
         />
       ) : null}
+      {needsGit ? (
+        <p role="status" className="wf-page">
+          Trellis keeps your workflows in Git. Allow Git access to see and save
+          them.{" "}
+          {permissions ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void permissions
+                  .requestAppPermissions({})
+                  .then((outcome) => {
+                    if (outcome !== "declined") refreshLibrary();
+                  })
+                  .catch((cause: unknown) => {
+                    setError(
+                      new Error("App permissions could not be opened.", {
+                        cause,
+                      }),
+                    );
+                  });
+              }}
+            >
+              Review permissions
+            </Button>
+          ) : null}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="wf-page">
           {error.message}{" "}
@@ -297,7 +339,7 @@ export function WorkflowWorkspace({
       {scope.kind === "all-workflows" ? (
         <main className="wf-page">
           <h1>All workflows</h1>
-          {!library ? (
+          {!library && !needsGit ? (
             <p role="status">
               {slow
                 ? "Loading is taking longer than usual. You can keep waiting or retry."
