@@ -252,7 +252,7 @@ function Divider({
   return divider ? (
     <ResizeHandle
       {...divider.props}
-      className="wf-divider"
+      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
       aria-label={label}
       orientation="vertical"
       value={divider.position}
@@ -261,8 +261,6 @@ function Divider({
       onValueChange={layout.resizeMain}
       style={{
         left: divider.position,
-        width: 8,
-        height: "100%",
         ...layout.stackingStyle,
       }}
     />

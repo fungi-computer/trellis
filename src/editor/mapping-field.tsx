@@ -92,7 +92,7 @@ export function MappingField({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${name} options`}
-        render={<Button size="xs" variant="ghost" />}
+        render={<Button size="xs" variant="outline" />}
       >
         Options
       </DropdownMenuTrigger>

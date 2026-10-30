@@ -1,5 +1,30 @@
 # @fungi.computer/trellis
 
+## 0.5.0
+
+### Minor Changes
+
+- Changes since 0.4.0:
+
+  - feat(trellis): forward schedule pages and pause
+  - fix(trellis): key inspector actions with existing Caps buttons
+  - fix(caps): use one resize knob in video apps
+  - fix(prints): merge video recovery and charge-safe failures
+  - fix(prints): repair Agent parity gate regressions
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.6.0
+  - @fungi.computer/braid@0.3.0
+  - @fungi.computer/caps@0.5.0
+  - @fungi.computer/puffball@0.3.0
+  - @fungi.computer/workflows-wire@0.3.0
+
 ## 0.4.0
 
 ### Minor Changes

@@ -16,7 +16,7 @@ import type {
 import { chatKey } from "../runs/run-workflow.js";
 import type { WorkflowDefinition } from "@fungi.computer/braid";
 
-/** Presentation port. The host adapter must scope these operations to the selected publication. */
+/** Presentation port for the selected Workflow's currently declared triggers. */
 export type TriggerControl = {
   list(): Promise<
     readonly {
@@ -37,7 +37,7 @@ export type TriggerControl = {
   >;
 };
 
-/** Bind only the member-selected publication; authority and cadence are owned by the host. */
+/** List by Workflow and declaration; the selected commit is used only when arming. */
 export function createTriggerControl(
   client: WorkflowClient,
   definition: WorkflowDefinition,
@@ -49,12 +49,19 @@ export function createTriggerControl(
   );
   return {
     async list() {
+      // A failed refresh must not leave previously read control IDs usable.
+      controls.clear();
       const [schedules, events] = await Promise.all([
-        client.listTriggers(),
+        // One native maximum-sized page is a work budget, not a retention cap.
+        client.listTriggers({ limit: 100 }),
         client.eventTriggers(),
       ]);
       if ("error" in schedules) throw new Error(schedules.error);
       if ("error" in events) throw new Error(events.error);
+      if (schedules.nextCursor !== null)
+        throw new Error(
+          "Schedule state is incomplete. This view cannot load another page; controls are unavailable.",
+        );
       const next = new Map<string, { on: "schedule" | "event"; id: string }>();
       const rows: Awaited<ReturnType<TriggerControl["list"]>>[number][] = [];
       for (const row of schedules.schedules) {
@@ -63,6 +70,10 @@ export function createTriggerControl(
           declared.get(row.triggerId) !== "schedule"
         )
           continue;
+        if (next.has(row.triggerId))
+          throw new Error(
+            `Multiple registrations match trigger "${row.triggerId}"; controls are unavailable.`,
+          );
         next.set(row.triggerId, { on: "schedule", id: row.scheduleId });
         rows.push({
           triggerId: row.triggerId,
@@ -76,6 +87,10 @@ export function createTriggerControl(
           declared.get(row.triggerId) !== "event"
         )
           continue;
+        if (next.has(row.triggerId))
+          throw new Error(
+            `Multiple registrations match trigger "${row.triggerId}"; controls are unavailable.`,
+          );
         next.set(row.triggerId, { on: "event", id: row.eventTriggerId });
         rows.push({
           triggerId: row.triggerId,

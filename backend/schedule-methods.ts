@@ -1,9 +1,12 @@
 import {
   triggerTargetSchema,
   scheduleArmReplySchema,
+  schedulePauseInputSchema,
+  schedulePauseReplySchema,
   triggerDisarmReplySchema,
   schedulesReplySchema,
   scheduleDisarmInputSchema,
+  scheduleListInputSchema,
   eventDisarmInputSchema,
   triggerListInputSchema,
   eventArmReplySchema,
@@ -59,6 +62,17 @@ export const scheduleMethods = {
       );
     },
   }),
+  pause: defineAppMethod({
+    description: "Pause future occurrences of an armed Workflow schedule.",
+    effect: "write",
+    requires: ["workflow.run", "workflow.arm"],
+    input: schedulePauseInputSchema,
+    output: schedulePauseReplySchema,
+    handler: async (input, context: WorkflowMethodContext) =>
+      schedulePauseReplySchema.parse(
+        await granted(context).pauseSchedule(input),
+      ),
+  }),
   disarm: defineAppMethod({
     description: "Cancel an armed Workflow schedule.",
     effect: "write",
@@ -72,13 +86,13 @@ export const scheduleMethods = {
   }),
   listTriggers: defineAppMethod({
     description:
-      "List this installation's schedules, next run times and paused reasons.",
+      "Read one bounded page of this installation's schedules, next run times and paused reasons.",
     effect: "read",
     requires: ["workflow.run"],
-    input: triggerListInputSchema,
+    input: scheduleListInputSchema,
     output: schedulesReplySchema,
-    handler: async (_input, context: WorkflowMethodContext) =>
-      schedulesReplySchema.parse(await granted(context).schedules({})),
+    handler: async (input, context: WorkflowMethodContext) =>
+      schedulesReplySchema.parse(await granted(context).schedules(input)),
   }),
   armEventTrigger: defineAppMethod({
     description:

@@ -89,7 +89,7 @@ export function InputFields({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={`${legend} options`}
-              render={<Button variant="ghost" size="xs" />}
+              render={<Button variant="outline" size="xs" />}
             >
               Options
             </DropdownMenuTrigger>
@@ -251,7 +251,7 @@ function InputField({
         </div>
         <div className="flex flex-wrap items-center gap-xs">
           <Button
-            variant="ghost"
+            variant="outline"
             size="xs"
             aria-label={`Edit input ${name}`}
             aria-expanded={expanded}
@@ -262,7 +262,7 @@ function InputField({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={`${label} options`}
-              render={<Button variant="ghost" size="xs" />}
+              render={<Button variant="outline" size="xs" />}
             >
               Options
             </DropdownMenuTrigger>
@@ -278,7 +278,7 @@ function InputField({
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="xs"
             aria-label={`Remove input ${name}`}
             onClick={onRemove}

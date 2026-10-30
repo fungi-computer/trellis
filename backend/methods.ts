@@ -18,6 +18,7 @@ import {
 import {
   chatsReplySchema,
   type WorkflowTriggerArmTarget,
+  type ScheduleListInput,
   answerReviewReply,
   cancelReplySchema,
   catalogInputSchema,
@@ -55,7 +56,10 @@ export type WorkflowMethodContext = Readonly<{
       disarmSchedule(input: {
         scheduleId: string;
       }): Promise<typeof Schema.Json.Type>;
-      schedules(input: Record<string, never>): Promise<typeof Schema.Json.Type>;
+      pauseSchedule(input: {
+        scheduleId: string;
+      }): Promise<typeof Schema.Json.Type>;
+      schedules(input: ScheduleListInput): Promise<typeof Schema.Json.Type>;
       catalog(input: {
         installationId?: string | undefined;
       }): Promise<typeof Schema.Json.Type>;

@@ -212,14 +212,6 @@
 .wf-tile-body > .wf-canvas {
   height: 100%;
 }
-.wf-divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  touch-action: none;
-  grid-template-columns: minmax(0, 1fr);
-}
 .wf-palette-entry {
   padding-block: var(--spacing-xs);
 }

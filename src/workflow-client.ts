@@ -113,16 +113,22 @@ export function workflowClient(transport: WorkflowTransport) {
         triggers.triggerTargetSchema.parse(target),
         triggers.scheduleArmReplySchema,
       ),
+    pause: (scheduleId: string) =>
+      call(
+        "pause",
+        triggers.schedulePauseInputSchema.parse({ scheduleId }),
+        triggers.schedulePauseReplySchema,
+      ),
     disarm: (scheduleId: string) =>
       call(
         "disarm",
         triggers.scheduleDisarmInputSchema.parse({ scheduleId }),
         triggers.triggerDisarmReplySchema,
       ),
-    listTriggers: () =>
+    listTriggers: (input: triggers.ScheduleListInput = {}) =>
       call(
         "listTriggers",
-        triggers.triggerListInputSchema.parse({}),
+        triggers.scheduleListInputSchema.parse(input),
         triggers.schedulesReplySchema,
       ),
     armEventTrigger: (target: triggers.WorkflowTriggerTarget) =>
