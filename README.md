@@ -25,6 +25,13 @@ Workflows, and its steps call the same App methods your agents use.
 - Arm a published version in **Triggers** to start on a schedule, on an App
   event such as a Bonsai push or merge, or from a webhook, and have it report
   its ending to one of your chats.
+- Open **Schedules** from the scope picker without selecting a workflow or
+  granting Git access. It shows this installation's Workflow registrations and
+  the Almanac reminders and Session Loops of Agents visible to Trellis. Pause
+  and Delete call the original owners and retain accepted work and history.
+  Agent read and management approval are independent. Missing or refused owners,
+  incomplete pages and unavailable private Local coverage are labelled, not
+  counted as empty schedules. Publication-context arming stays in Triggers.
 - Start from **Templates**: Bonsai checks (run `npm test` on each Change and
   report the result), Build on merge, Review a result, Storyboard (panels from
   Prints with a review per beat) and Storyboard + Save to git.

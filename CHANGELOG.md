@@ -1,5 +1,32 @@
 # @fungi.computer/trellis
 
+## 0.6.0
+
+### Minor Changes
+
+- Changes since 0.5.0:
+
+  - feat(schedules): resume paused schedules through native owners
+  - fix(trellis): return explicit Agent schedule read failures
+  - feat(trellis): join live schedule admission and finish schema boundary
+  - feat(trellis): checkpoint connection-bound schedules UI
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/braid@0.4.0
+  - @fungi.computer/caps@0.6.0
+  - @fungi.computer/puffball@0.4.0
+  - @fungi.computer/shiitake-extensions@0.6.0
+  - @fungi.computer/sigils@0.2.1
+  - @fungi.computer/workflows-wire@0.4.0
+  - @fungi.computer/agar@0.6.1
+
 ## 0.5.0
 
 ### Minor Changes

@@ -3,6 +3,8 @@ import {
   scheduleArmReplySchema,
   schedulePauseInputSchema,
   schedulePauseReplySchema,
+  scheduleResumeInputSchema,
+  scheduleResumeReplySchema,
   triggerDisarmReplySchema,
   schedulesReplySchema,
   scheduleDisarmInputSchema,
@@ -71,6 +73,17 @@ export const scheduleMethods = {
     handler: async (input, context: WorkflowMethodContext) =>
       schedulePauseReplySchema.parse(
         await granted(context).pauseSchedule(input),
+      ),
+  }),
+  resume: defineAppMethod({
+    description: "Resume future occurrences of a paused Workflow schedule.",
+    effect: "write",
+    requires: ["workflow.run", "workflow.arm"],
+    input: scheduleResumeInputSchema,
+    output: scheduleResumeReplySchema,
+    handler: async (input, context: WorkflowMethodContext) =>
+      scheduleResumeReplySchema.parse(
+        await granted(context).resumeSchedule(input),
       ),
   }),
   disarm: defineAppMethod({

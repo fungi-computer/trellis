@@ -197,6 +197,7 @@ export const libraryMethods = {
       "workflow.arm",
       "media.generation",
       "computer.writeFile",
+      "agent.manage",
     ],
     input: z.strictObject({}),
     output: z.strictObject({ more: z.boolean() }),

@@ -15,6 +15,7 @@ import type { ReadMedia } from "./runs/output-preview.js";
 import type { OpenInApp } from "./runs/run-timeline.js";
 import { Triggers } from "./triggers/triggers.js";
 import { Templates } from "./templates/templates.js";
+import { Schedules } from "./schedules/schedules.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
@@ -30,7 +31,7 @@ const toolLabels = {
 } as const;
 type Tool = keyof typeof toolLabels;
 export type WorkflowScope =
-  | { kind: "all-runs" | "templates" | "all-workflows" }
+  | { kind: "all-runs" | "templates" | "all-workflows" | "schedules" }
   | { kind: "workflow"; workflowId: string };
 
 export function WorkflowWorkspace({
@@ -55,6 +56,7 @@ export function WorkflowWorkspace({
     ReturnType<WorkflowClient["listWorkflows"]>
   > | null>(null);
   const [scope, setScope] = useState<WorkflowScope>(initialScope);
+  const viewingSchedules = scope.kind === "schedules";
   const [tool, setTool] = useState<Tool>("editor");
   // Window-local picker recency only. Back never reads this list.
   const [recent, setRecent] = useState<readonly string[]>(() =>
@@ -108,6 +110,7 @@ export function WorkflowWorkspace({
     choose(target.data);
   }, [client, openRequest, choose]);
   useEffect(() => {
+    if (viewingSchedules) return;
     let active = true;
     setError(null);
     setNeedsGit(false);
@@ -144,7 +147,7 @@ export function WorkflowWorkspace({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [client, attempt]);
+  }, [client, attempt, viewingSchedules]);
   const refreshLibrary = useCallback(() => {
     setAttempt((value) => value + 1);
   }, []);
@@ -180,13 +183,16 @@ export function WorkflowWorkspace({
     label:
       scope.kind === "workflow"
         ? (title ?? workflowId ?? "Workflow")
-        : scope.kind === "templates"
-          ? "Templates"
-          : scope.kind === "all-workflows"
-            ? "All workflows"
-            : "All runs",
+        : scope.kind === "schedules"
+          ? "Schedules"
+          : scope.kind === "templates"
+            ? "Templates"
+            : scope.kind === "all-workflows"
+              ? "All workflows"
+              : "All runs",
     siblings: [
       { id: "all-runs", label: "All runs" },
+      { id: "schedules", label: "Schedules" },
       { id: "templates", label: "Templates" },
       ...recent.flatMap((id) => {
         const item = workflows.find((item) => item.workflowId === id);
@@ -202,7 +208,12 @@ export function WorkflowWorkspace({
         if (!busy) void create();
         return;
       }
-      if (id === "all-runs" || id === "templates" || id === "all-workflows") {
+      if (
+        id === "all-runs" ||
+        id === "templates" ||
+        id === "all-workflows" ||
+        id === "schedules"
+      ) {
         setScope({ kind: id });
         setSelectedRun(null);
         return;
@@ -294,7 +305,7 @@ export function WorkflowWorkspace({
           onDialog={setShareDialog}
         />
       ) : null}
-      {needsGit ? (
+      {!viewingSchedules && needsGit ? (
         <p role="status" className="wf-page">
           Trellis keeps your workflows in Git. Allow Git access to see and save
           them.{" "}
@@ -321,7 +332,7 @@ export function WorkflowWorkspace({
           ) : null}
         </p>
       ) : null}
-      {error ? (
+      {!viewingSchedules && error ? (
         <p role="alert" className="wf-page">
           {error.message}{" "}
           {library && !Array.isArray(library) ? null : (
@@ -419,6 +430,7 @@ export function WorkflowWorkspace({
       {scope.kind === "templates" ? (
         <Templates client={client} onUse={choose} />
       ) : null}
+      {viewingSchedules ? <Schedules client={client} /> : null}
     </>
   );
 }

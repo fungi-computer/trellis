@@ -1,6 +1,6 @@
 {
   "name": "@fungi.computer/trellis",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "scripts": {
     "build": "vite build && tsc -p backend/tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit",
@@ -8,25 +8,27 @@
     "rebuild-copies": "node --import tsx scripts/rebuild-copies.mjs"
   },
   "dependencies": {
-    "@fungi.computer/puffball": "0.3.0",
+    "@fungi.computer/puffball": "0.4.0",
+    "@fungi.computer/shiitake-extensions": "0.6.0",
     "@cfworker/json-schema": "4.1.1",
-    "@fungi.computer/agar": "0.6.0",
-    "@fungi.computer/caps": "0.5.0",
+    "@fungi.computer/agar": "0.6.1",
+    "@fungi.computer/caps": "0.6.0",
     "@fungi.computer/stipe": "0.1.0",
     "@xyflow/react": "12.12.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@fungi.computer/braid": "0.3.0",
+    "@fungi.computer/braid": "0.4.0",
     "effect": "4.0.2",
-    "@fungi.computer/sigils": "0.2.0",
+    "@fungi.computer/sigils": "0.2.1",
     "lucide-react": "0.460.0",
     "zod": "4.4.3",
-    "@fungi.computer/workflows-wire": "0.3.0",
+    "@fungi.computer/workflows-wire": "0.4.0",
     "@fungi.computer/cairn": "0.1.0",
     "@fungi.computer/watchdog": "0.1.0",
     "@fungi.computer/maosaico": "0.1.0"
   },
   "devDependencies": {
+    "@fungi.computer/sprite": "0.2.0",
     "@cloudflare/workers-types": "5.20260828.1",
     "@ladle/react": "5.1.1",
     "@tailwindcss/vite": "4.2.1",
@@ -76,6 +78,8 @@
         "workflow.arm",
         "git.repository",
         "agent.read",
+        "agent.list",
+        "agent.manage",
         "apps.open"
       ],
       "handlers": [],
@@ -101,6 +105,7 @@
               "answerReview",
               "armSchedule",
               "pauseSchedule",
+              "resumeSchedule",
               "disarmSchedule",
               "schedules",
               "armEventTrigger",
@@ -113,6 +118,15 @@
             "name": "INBOX",
             "operations": [
               "page"
+            ]
+          },
+          {
+            "name": "AGENTS",
+            "operations": [
+              "schedules",
+              "pauseSchedule",
+              "resumeSchedule",
+              "deleteSchedule"
             ]
           }
         ]

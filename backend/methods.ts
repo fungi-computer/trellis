@@ -7,6 +7,11 @@ import type { BackgroundBinding } from "@fungi.computer/puffball/background-repl
 import type { GitBinding } from "@fungi.computer/agar/git";
 import type { WorkflowIndexes } from "./indexes.js";
 import { scheduleMethods } from "./schedule-methods.js";
+import { agentScheduleMethods } from "./agent-schedule-methods.js";
+import type {
+  listAgentSchedulesInputSchema,
+  agentScheduleTargetSchema,
+} from "../shared/agent-schedules.js";
 import { toolFamilyMethods } from "./tool-family.js";
 import { libraryMethods } from "./library-methods.js";
 import * as Schema from "effect/Schema";
@@ -34,6 +39,20 @@ const inboxPage = z.object({ items: z.array(z.json()).max(200) });
 export type WorkflowMethodContext = Readonly<{
   indexes?: WorkflowIndexes;
   env: Readonly<{
+    AGENTS?: Readonly<{
+      schedules(
+        input: z.output<typeof listAgentSchedulesInputSchema>,
+      ): Promise<typeof Schema.Json.Type>;
+      pauseSchedule(
+        input: z.output<typeof agentScheduleTargetSchema>,
+      ): Promise<typeof Schema.Json.Type>;
+      resumeSchedule(
+        input: z.output<typeof agentScheduleTargetSchema>,
+      ): Promise<typeof Schema.Json.Type>;
+      deleteSchedule(
+        input: z.output<typeof agentScheduleTargetSchema>,
+      ): Promise<typeof Schema.Json.Type>;
+    }>;
     GIT?: GitBinding;
     /** The member's Inbox, read only to offer chats for run reports. */
     INBOX?: Readonly<{
@@ -57,6 +76,9 @@ export type WorkflowMethodContext = Readonly<{
         scheduleId: string;
       }): Promise<typeof Schema.Json.Type>;
       pauseSchedule(input: {
+        scheduleId: string;
+      }): Promise<typeof Schema.Json.Type>;
+      resumeSchedule(input: {
         scheduleId: string;
       }): Promise<typeof Schema.Json.Type>;
       schedules(input: ScheduleListInput): Promise<typeof Schema.Json.Type>;
@@ -137,6 +159,7 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
           : { error: "not_granted" },
     }),
     ...scheduleMethods,
+    ...agentScheduleMethods,
     listChats: defineAppMethod({
       description:
         "List your existing chats (Agent Sessions) that a run or trigger may report its result to.",

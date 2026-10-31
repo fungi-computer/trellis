@@ -3,6 +3,19 @@ import * as S from "effect/Schema";
 import { appMethods } from "@fungi.computer/agar/backend";
 import type { CapabilityDirectory } from "@fungi.computer/agar";
 import {
+  agentList,
+  type AppAgentListHandle,
+} from "@fungi.computer/agar/agents";
+import {
+  listAgentSchedulesInputSchema,
+  agentScheduleTargetSchema,
+  agentSchedulesReplySchema,
+  agentScheduleControlReplySchema,
+  decodeAgentSchedulePage,
+  decodeAgentScheduleControl,
+} from "../shared/agent-schedules.js";
+import type { AgentScheduleTarget } from "@fungi.computer/shiitake-extensions/schedules";
+import {
   catalogSchema,
   workflowDefinitionSchema,
   workflowIdSchema,
@@ -22,10 +35,15 @@ import { runStatusSchema } from "./runs/run-state.js";
 
 export type WorkflowTransport = z.output<typeof appMethods.schema>;
 export function openWorkflows(capabilities: CapabilityDirectory) {
-  return workflowClient(capabilities.require(appMethods));
+  return workflowClient(capabilities.require(appMethods), {
+    list: () => capabilities.require(agentList).list(),
+  });
 }
 /** The App method schemas decode the wire; the graph owner decodes definitions. */
-export function workflowClient(transport: WorkflowTransport) {
+export function workflowClient(
+  transport: WorkflowTransport,
+  agents?: AppAgentListHandle,
+) {
   async function call<T>(
     method: string,
     input: S.Json,
@@ -63,6 +81,43 @@ export function workflowClient(transport: WorkflowTransport) {
     return "chats" in reply ? reply.chats : [];
   }
   return {
+    async listScheduleAgents() {
+      if (agents === undefined)
+        throw new Error("The Agent directory is unavailable or not granted.");
+      return agents.list();
+    },
+    listAgentSchedules: async (agentId: string) =>
+      decodeAgentSchedulePage(
+        await call(
+          "listAgentSchedules",
+          listAgentSchedulesInputSchema.parse({ agentId }),
+          agentSchedulesReplySchema,
+        ),
+      ),
+    pauseAgentSchedule: async (target: AgentScheduleTarget) =>
+      decodeAgentScheduleControl(
+        await call(
+          "pauseAgentSchedule",
+          agentScheduleTargetSchema.parse(target),
+          agentScheduleControlReplySchema,
+        ),
+      ),
+    resumeAgentSchedule: async (target: AgentScheduleTarget) =>
+      decodeAgentScheduleControl(
+        await call(
+          "resumeAgentSchedule",
+          agentScheduleTargetSchema.parse(target),
+          agentScheduleControlReplySchema,
+        ),
+      ),
+    deleteAgentSchedule: async (target: AgentScheduleTarget) =>
+      decodeAgentScheduleControl(
+        await call(
+          "deleteAgentSchedule",
+          agentScheduleTargetSchema.parse(target),
+          agentScheduleControlReplySchema,
+        ),
+      ),
     /**
      * The palette index (every installation, no port schemas) plus a
      * `Catalog` with full ports for only the named `appIds` -- one extra
@@ -118,6 +173,12 @@ export function workflowClient(transport: WorkflowTransport) {
         "pause",
         triggers.schedulePauseInputSchema.parse({ scheduleId }),
         triggers.schedulePauseReplySchema,
+      ),
+    resume: (scheduleId: string) =>
+      call(
+        "resume",
+        triggers.scheduleResumeInputSchema.parse({ scheduleId }),
+        triggers.scheduleResumeReplySchema,
       ),
     disarm: (scheduleId: string) =>
       call(

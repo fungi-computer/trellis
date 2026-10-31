@@ -1,0 +1,57 @@
+.wf-schedules {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.wf-schedules-heading,
+.wf-schedule-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+.wf-schedules-heading h1 {
+  margin-top: 0;
+}
+.wf-schedules > section,
+.wf-schedules > aside {
+  margin-top: var(--spacing-xl);
+}
+.wf-schedule-agent {
+  margin-block: var(--spacing-lg);
+}
+.wf-schedule-subject {
+  min-width: 0;
+  flex: 1;
+}
+.wf-schedule-subject h3,
+.wf-schedule-subject h4 {
+  font-weight: 600;
+  margin: 0;
+}
+.wf-schedules p {
+  margin-block: var(--spacing-xs);
+}
+.wf-schedules .wf-muted {
+  color: var(--wf-muted);
+  font-size: var(--text-sm);
+}
+.wf-schedules h3,
+.wf-schedules h4,
+.wf-schedules p,
+.wf-schedules aside {
+  overflow-wrap: anywhere;
+}
+.wf-schedule-prompt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .wf-schedule-row {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+}
