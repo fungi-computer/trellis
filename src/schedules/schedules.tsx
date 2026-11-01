@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppAgent } from "@fungi.computer/agar/agents";
 import { Button } from "@fungi.computer/caps/components/button";
-import { DataList, DataRow } from "@fungi.computer/caps/components/data-list";
+import {
+  DataList,
+  DataListHeading,
+  DataRow,
+} from "@fungi.computer/caps/components/data-list";
 import {
   Dialog,
   DialogContent,
@@ -10,15 +14,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@fungi.computer/caps/components/dialog";
+import { IconButton } from "@fungi.computer/caps/components/icon-button";
+import { KeycapButton } from "@fungi.computer/caps/components/keycap";
+import { Status } from "@fungi.computer/caps/components/status";
+import { Surface } from "@fungi.computer/caps/components/surface";
 import type { AgentScheduleRow } from "@fungi.computer/shiitake-extensions/schedules";
+import { Sigil } from "@fungi.computer/sigils";
+import { Pause, Play, RotateCw, Trash2, X } from "lucide-react";
 import type { WorkflowClient } from "../workflow-client.js";
 import {
   agentPageRows,
+  SchedulePageError,
   scheduleKey,
   scheduleTarget,
   workflowPageRows,
   type WorkflowSchedule,
 } from "./page.js";
+import {
+  presentSchedule,
+  type ScheduleAction,
+  type ScheduleSubject,
+} from "./present.js";
 import "./schedules.css";
 
 type Read<T> =
@@ -26,20 +42,42 @@ type Read<T> =
   | { kind: "unavailable"; message: string }
   | { kind: "ready"; rows: readonly T[] };
 type AgentGroup = { agent: AppAgent; page: Read<AgentScheduleRow> };
+type Entry = {
+  key: string;
+  subject: ScheduleSubject;
+  shown: ReturnType<typeof presentSchedule>;
+};
+type Group = {
+  key: string;
+  name: string;
+  label: string;
+  viewOnly: boolean;
+  page: Read<unknown>;
+  entries: Entry[];
+  empty: string;
+};
+const actionLabels = { pause: "Pause", resume: "Resume", delete: "Delete" };
+const acknowledgements = {
+  pause: "Paused.",
+  resume: "Resumed.",
+  delete: "Deleted.",
+};
+class ReceiptMismatch extends Error {}
 
-function failure(cause: unknown): string {
-  return cause instanceof Error
-    ? cause.message
-    : "The schedule owner is unavailable.";
+function readFailure(cause: unknown, fallback: string): string {
+  return cause instanceof SchedulePageError ? cause.message : fallback;
 }
 
 async function readAgentPage(
   client: WorkflowClient,
   agent: AppAgent,
 ): Promise<Read<AgentScheduleRow>> {
+  if (!agent.sessionOperations.includes("agent.read"))
+    return {
+      kind: "unavailable",
+      message: "Trellis can't see " + agent.name + "'s schedules.",
+    };
   try {
-    if (!agent.sessionOperations.includes("agent.read"))
-      throw new Error("Schedule read access is not granted for this Agent.");
     return {
       kind: "ready",
       rows: agentPageRows(
@@ -48,49 +86,124 @@ async function readAgentPage(
       ),
     };
   } catch (cause) {
-    return { kind: "unavailable", message: failure(cause) };
+    return {
+      kind: "unavailable",
+      message: readFailure(
+        cause,
+        agent.name + "'s schedules aren't available right now.",
+      ),
+    };
   }
 }
 
-function Due({ value }: { value: number | null }) {
-  if (value === null) return <span>No occurrence scheduled</span>;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return <span>Time unavailable</span>;
-  return (
-    <time dateTime={date.toISOString()}>
-      {date.toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })}
-    </time>
-  );
-}
-
-function Actions({
-  disabled,
-  active,
-  onPause,
-  onDelete,
+/** Prints' non-modal fact table and equal key panel. The list owns return focus. */
+function ScheduleInfo({
+  entry,
+  pending,
+  notice,
+  error,
+  onClose,
+  onAction,
 }: {
-  disabled: boolean;
-  active: boolean;
-  onPause: () => void;
-  onDelete: () => void;
+  entry: Entry;
+  pending: ScheduleAction | null;
+  notice: string | null;
+  error: string | null;
+  onClose: () => void;
+  onAction: (action: ScheduleAction) => void;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    panel.current?.focus();
+  }, []);
+  const { shown } = entry;
   return (
-    <div className="wf-actions">
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={disabled || !active}
-        onClick={onPause}
-      >
-        Pause
-      </Button>
-      <Button variant="ghost" size="sm" disabled={disabled} onClick={onDelete}>
-        Delete
-      </Button>
-    </div>
+    <Surface
+      ref={panel}
+      className="wf-schedule-info"
+      role="region"
+      aria-label="Schedule info"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <div className="wf-schedule-info-heading">
+        <h2>Schedule info</h2>
+        <IconButton
+          aria-label="Close schedule info"
+          icon={<X />}
+          onClick={onClose}
+        />
+      </div>
+      <p className="wf-schedule-kind">
+        <Sigil name={shown.kindSigil} size={20} />
+        {shown.kindLabel}
+      </p>
+      <DataList density="compact" className="wf-schedule-facts">
+        {shown.facts.map((fact) => (
+          <DataRow key={fact.label}>
+            <span className="wf-fact-label">
+              <Sigil name={fact.sigil} size={16} />
+              {fact.label}
+            </span>
+            <span
+              className="wf-fact-value"
+              role={fact.alert ? "alert" : undefined}
+            >
+              {fact.dateTime ? (
+                <time dateTime={fact.dateTime}>{fact.value}</time>
+              ) : (
+                fact.value
+              )}
+            </span>
+          </DataRow>
+        ))}
+      </DataList>
+      {shown.keys.length > 0 ? (
+        <div
+          className="wf-schedule-keys"
+          role="group"
+          aria-label="Schedule actions"
+        >
+          {shown.keys.map((action) => (
+            <KeycapButton
+              key={action}
+              label={actionLabels[action]}
+              icon={
+                action === "pause" ? (
+                  <Pause />
+                ) : action === "resume" ? (
+                  <Play />
+                ) : (
+                  <Trash2 />
+                )
+              }
+              tone={action === "delete" ? "destructive" : "neutral"}
+              title={
+                action === "pause"
+                  ? "Stop future runs until you resume."
+                  : action === "resume"
+                    ? "Start again from the next run time."
+                    : undefined
+              }
+              disabled={pending !== null}
+              aria-busy={pending === action}
+              onClick={() => {
+                onAction(action);
+              }}
+            />
+          ))}
+        </div>
+      ) : shown.viewOnly ? (
+        <p className="wf-muted">You can see this schedule but not change it.</p>
+      ) : null}
+      {notice ? <p role="status">{notice}</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
+    </Surface>
   );
 }
 
@@ -101,21 +214,38 @@ export function Schedules({ client }: { client: WorkflowClient }) {
   });
   const [agents, setAgents] = useState<Read<AgentGroup>>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<ScheduleAction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<{
-    title: string;
-    run: () => Promise<string>;
-  } | null>(null);
+  const [confirmation, setConfirmation] = useState<Entry | null>(null);
+  // Undefined permits the desktop default; null records an explicit close.
+  const [selectedKey, setSelectedKey] = useState<string | null>();
+  const [wide, setWide] = useState(false);
+  const main = useRef<HTMLElement>(null);
   const generation = useRef(0);
+  const busy = pending !== null;
+  useEffect(() => {
+    const element = main.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const rem = Number.parseFloat(
+        getComputedStyle(document.documentElement).fontSize,
+      );
+      // Container queries use the content box, not the padded border box.
+      setWide(entry.contentRect.width > 40 * rem);
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   useEffect(() => {
     const version = ++generation.current;
     const current = () => generation.current === version;
     setWorkflow({ kind: "loading" });
     setAgents({ kind: "loading" });
     setConfirmation(null);
-    setBusy(false);
+    setPending(null);
     void client
       .listTriggers({ limit: 100 })
       .then((page) => {
@@ -124,17 +254,20 @@ export function Schedules({ client }: { client: WorkflowClient }) {
       })
       .catch((cause: unknown) => {
         if (current())
-          setWorkflow({ kind: "unavailable", message: failure(cause) });
+          setWorkflow({
+            kind: "unavailable",
+            message: readFailure(
+              cause,
+              "Workflow schedules aren't available right now.",
+            ),
+          });
       });
     void (async () => {
       const directory = await client.listScheduleAgents();
       if (!current()) return;
       const seen = new Set<string>();
       for (const agent of directory) {
-        if (seen.has(agent.agentId))
-          throw new Error(
-            "Duplicate Agent identity; schedules are unavailable.",
-          );
+        if (seen.has(agent.agentId)) throw new SchedulePageError("identity");
         seen.add(agent.agentId);
       }
       setAgents({
@@ -161,266 +294,251 @@ export function Schedules({ client }: { client: WorkflowClient }) {
       }
     })().catch((cause: unknown) => {
       if (current())
-        setAgents({ kind: "unavailable", message: failure(cause) });
+        setAgents({
+          kind: "unavailable",
+          message: readFailure(
+            cause,
+            "Agent schedules aren't available right now.",
+          ),
+        });
     });
     return () => {
       generation.current++;
     };
   }, [client, attempt]);
 
-  async function change(run: () => Promise<string>) {
+  const now = Date.now();
+  const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  function entry(subject: ScheduleSubject): Entry {
+    return {
+      key:
+        subject.kind === "workflow"
+          ? JSON.stringify(["workflow", subject.row.scheduleId])
+          : scheduleKey(scheduleTarget(subject.row)),
+      subject,
+      shown: presentSchedule(subject, now, viewerZone),
+    };
+  }
+  const groups: Group[] = [
+    {
+      key: "workflows",
+      name: "Workflows",
+      label: "Workflow schedules",
+      viewOnly: false,
+      page: workflow,
+      entries:
+        workflow.kind === "ready"
+          ? workflow.rows.map((row) => entry({ kind: "workflow", row }))
+          : [],
+      empty: "No Workflow schedules yet.",
+    },
+    ...(agents.kind === "ready"
+      ? agents.rows.map(({ agent, page }) => {
+          const canManage = agent.sessionOperations.includes("agent.manage");
+          return {
+            key: agent.agentId,
+            name: agent.name,
+            label: agent.name + " schedules",
+            viewOnly: !canManage,
+            page,
+            entries:
+              page.kind === "ready"
+                ? page.rows.map((row) =>
+                    entry({
+                      kind: "agent",
+                      row,
+                      agentName: agent.name,
+                      canManage,
+                    }),
+                  )
+                : [],
+            empty: "No schedules yet.",
+          };
+        })
+      : []),
+  ];
+  const entries = groups.flatMap((group) => group.entries);
+  const selected =
+    selectedKey === undefined
+      ? wide
+        ? entries[0]
+        : undefined
+      : entries.find((row) => row.key === selectedKey);
+
+  function closeInfo() {
+    const opener = [
+      ...(main.current?.querySelectorAll<HTMLButtonElement>(
+        ".wf-schedule-open",
+      ) ?? []),
+    ].find((button) => button.dataset.scheduleKey === selected?.key);
+    setSelectedKey(null);
+    opener?.focus();
+  }
+
+  async function mutate(subject: ScheduleSubject, action: ScheduleAction) {
+    if (subject.kind === "agent") {
+      const target = scheduleTarget(subject.row);
+      const receipt = await (action === "pause"
+        ? client.pauseAgentSchedule(target)
+        : action === "resume"
+          ? client.resumeAgentSchedule(target)
+          : client.deleteAgentSchedule(target));
+      const expected =
+        action === "pause"
+          ? "paused"
+          : action === "resume"
+            ? "active"
+            : "cancelled";
+      if (
+        scheduleKey(receipt) !== scheduleKey(target) ||
+        (receipt.state !== expected &&
+          !(action === "delete" && receipt.state === "finished"))
+      )
+        throw new ReceiptMismatch();
+      return acknowledgements[action];
+    }
+    const result = await (action === "pause"
+      ? client.pause(subject.row.scheduleId)
+      : action === "resume"
+        ? client.resume(subject.row.scheduleId)
+        : client.disarm(subject.row.scheduleId));
+    if ("error" in result) throw new Error(result.error);
+    if (result.kind === "refused") throw new Error(result.reason);
+    return result.kind === "not_found"
+      ? "This schedule is already gone."
+      : acknowledgements[action];
+  }
+
+  async function change(target: Entry, action: ScheduleAction) {
     // Withdraw all old controls before the call, including while a refresh fails.
     const version = ++generation.current;
-    setBusy(true);
+    setPending(action);
     setError(null);
     setNotice(null);
     setWorkflow({ kind: "loading" });
     setAgents({ kind: "loading" });
     try {
-      const result = await run();
+      const result = await mutate(target.subject, action);
       if (generation.current === version) setNotice(result);
     } catch (cause) {
-      if (generation.current === version) setError(failure(cause));
+      if (generation.current === version)
+        setError(
+          "Couldn't " +
+            action +
+            " this schedule." +
+            (cause instanceof ReceiptMismatch ? " Refresh and try again." : ""),
+        );
     } finally {
       if (generation.current === version) {
-        setBusy(false);
+        setPending(null);
         setConfirmation(null);
         setAttempt((value) => value + 1);
       }
     }
   }
 
-  async function agentChange(
-    row: AgentScheduleRow,
-    action: "pause" | "delete",
-  ) {
-    const target = scheduleTarget(row);
-    const receipt = await (action === "pause"
-      ? client.pauseAgentSchedule(target)
-      : client.deleteAgentSchedule(target));
-    if (scheduleKey(receipt) !== scheduleKey(target))
-      throw new Error(
-        "The owner returned another schedule identity. Refresh before trying again.",
-      );
-    return `Owner state: ${receipt.state}.`;
-  }
-
-  async function workflowChange(
-    row: WorkflowSchedule,
-    action: "pause" | "delete",
-  ) {
-    const result = await (action === "pause"
-      ? client.pause(row.scheduleId)
-      : client.disarm(row.scheduleId));
-    if ("error" in result) throw new Error(result.error);
-    return result.kind === "not_found"
-      ? "The registration is no longer available."
-      : "The owner accepted the change.";
-  }
-
   return (
-    <main className="wf-page wf-schedules">
+    <main ref={main} className="wf-page wf-schedules">
       <header className="wf-schedules-heading">
         <div>
           <h1>Schedules</h1>
           <p className="wf-muted">
-            Agent reminders, Session Loops and this installation’s Workflow
-            schedules.
+            Reminders, Session Loops and Workflow schedules.
           </p>
         </div>
-        <Button
-          variant="ghost"
+        <IconButton
+          aria-label="Refresh schedules"
+          title="Refresh"
+          icon={<RotateCw />}
           disabled={busy}
           onClick={() => {
+            setNotice(null);
+            setError(null);
             setAttempt((value) => value + 1);
           }}
-        >
-          Refresh
-        </Button>
+        />
       </header>
-      <p className="wf-muted">
-        Pause or Delete stops future occurrences. Already accepted work and
-        history are kept.
-      </p>
-      {busy ? <p role="status">Waiting for the schedule owner…</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {error ? (
-        <p role="alert">The change could not be confirmed: {error}</p>
-      ) : null}
-      <section aria-label="Workflow schedules">
-        <h2>Workflows</h2>
-        {workflow.kind === "loading" ? (
-          <p role="status">Loading Workflow schedules…</p>
-        ) : null}
-        {workflow.kind === "unavailable" ? (
-          <p role="alert">Workflow schedules unavailable: {workflow.message}</p>
-        ) : null}
-        {workflow.kind === "ready" ? (
-          <>
-            {workflow.rows.length === 0 ? (
-              <p>No Workflow schedules in this installation.</p>
-            ) : null}
-            <DataList aria-label="Workflow schedule registrations">
-              {workflow.rows.map((row) => (
-                <DataRow key={row.scheduleId} className="wf-schedule-row">
-                  <div className="wf-schedule-subject">
-                    <h3>
-                      {row.workflowId}{" "}
-                      <span className="wf-muted">/ {row.triggerId}</span>
-                    </h3>
-                    <p className="wf-muted">
-                      Workflow · Installation {row.installationId}
-                    </p>
-                    <p>
-                      <Due value={row.nextDueAt} /> · {row.state}
-                    </p>
-                    <details>
-                      <summary>Registration details</summary>
-                      <p>Schedule {row.scheduleId}</p>
-                      <p>
-                        Cadence, armer and grantor attribution are unavailable
-                        in this owner’s listing.
-                      </p>
-                    </details>
-                    {row.lastError ? <p role="alert">{row.lastError}</p> : null}
-                  </div>
-                  <Actions
-                    disabled={
-                      busy ||
-                      row.state === "cancelled" ||
-                      row.state === "finished"
-                    }
-                    active={row.state === "active"}
-                    onPause={() =>
-                      void change(() => workflowChange(row, "pause"))
-                    }
-                    onDelete={() => {
-                      setConfirmation({
-                        title: `${row.workflowId} / ${row.triggerId}`,
-                        run: () => workflowChange(row, "delete"),
-                      });
-                    }}
-                  />
-                </DataRow>
-              ))}
-            </DataList>
-          </>
-        ) : null}
-      </section>
-      <section aria-label="Agent schedules">
-        <h2>Agents</h2>
-        {agents.kind === "loading" ? (
-          <p role="status">Loading Agent schedules…</p>
-        ) : null}
-        {agents.kind === "unavailable" ? (
-          <p role="alert">Agent schedules unavailable: {agents.message}</p>
-        ) : null}
-        {agents.kind === "ready" && agents.rows.length === 0 ? (
-          <p>No Agents are visible to Trellis.</p>
-        ) : null}
-        {agents.kind === "ready"
-          ? agents.rows.map(({ agent, page }) => (
-              <section
-                key={agent.agentId}
-                aria-label={`${agent.name} schedules`}
-                className="wf-schedule-agent"
+      {busy ? <p role="status">Updating…</p> : null}
+      {!selected && notice ? <p role="status">{notice}</p> : null}
+      {!selected && error ? <p role="alert">{error}</p> : null}
+      <div className="wf-schedules-body">
+        <div className="wf-schedules-list">
+          {groups.map((group) => (
+            <section key={group.key} aria-label={group.label}>
+              <DataListHeading
+                level={2}
+                aside={group.viewOnly ? "View only" : undefined}
               >
-                <h3>{agent.name}</h3>
-                <p className="wf-muted">Agent {agent.agentId}</p>
-                {page.kind === "loading" ? (
-                  <p role="status">Loading schedules…</p>
-                ) : null}
-                {page.kind === "unavailable" ? (
-                  <p role="alert">Unavailable: {page.message}</p>
-                ) : null}
-                {page.kind === "ready" ? (
-                  <>
-                    {page.rows.length === 0 ? (
-                      <p>No schedules for this Agent.</p>
-                    ) : null}
-                    {!agent.sessionOperations.includes("agent.manage") ? (
-                      <p className="wf-muted">
-                        Read only. Schedule management is not granted for this
-                        Agent.
-                      </p>
-                    ) : null}
-                    <DataList
-                      aria-label={`${agent.name} schedule registrations`}
+                {group.name}
+              </DataListHeading>
+              {group.page.kind === "loading" ? (
+                <p role="status">Loading…</p>
+              ) : group.page.kind === "unavailable" ? (
+                <p role="alert">{group.page.message}</p>
+              ) : group.entries.length === 0 ? (
+                <p>{group.empty}</p>
+              ) : (
+                <DataList aria-label={group.name + " schedule registrations"}>
+                  {group.entries.map((row) => (
+                    <DataRow
+                      key={row.key}
+                      className="wf-schedule-row"
+                      aria-current={selected?.key === row.key || undefined}
                     >
-                      {page.rows.map((row) => (
-                        <DataRow
-                          key={scheduleKey(scheduleTarget(row))}
-                          className="wf-schedule-row"
-                        >
-                          <div className="wf-schedule-subject">
-                            <h4>
-                              {row.kind === "almanac"
-                                ? "Reminder"
-                                : "Session Loop"}
-                            </h4>
-                            <p className="wf-schedule-prompt">
-                              {row.schedule.prompt}
-                            </p>
-                            <p>
-                              <Due value={row.schedule.nextDueAt} /> ·{" "}
-                              {row.schedule.state}
-                            </p>
-                            <p className="wf-muted">
-                              {row.schedule.cron
-                                ? `${row.schedule.cron.expression} · ${row.schedule.cron.timeZone}`
-                                : row.kind === "loop"
-                                  ? row.schedule.mode === "self_paced"
-                                    ? "Self-paced"
-                                    : "Cadence unavailable"
-                                  : "One-time"}{" "}
-                              · Session {row.schedule.sessionId}
-                            </p>
-                            {row.kind === "loop" ? (
-                              <p className="wf-muted">
-                                Started by{" "}
-                                {row.schedule.origin === "human"
-                                  ? "a person"
-                                  : "the model"}
-                              </p>
-                            ) : null}
-                            {row.schedule.lastError ? (
-                              <p role="alert">{row.schedule.lastError}</p>
-                            ) : null}
-                          </div>
-                          <Actions
-                            disabled={
-                              busy ||
-                              !agent.sessionOperations.includes(
-                                "agent.manage",
-                              ) ||
-                              row.schedule.state === "cancelled" ||
-                              row.schedule.state === "finished"
-                            }
-                            active={row.schedule.state === "active"}
-                            onPause={() =>
-                              void change(() => agentChange(row, "pause"))
-                            }
-                            onDelete={() => {
-                              setConfirmation({
-                                title: `${agent.name} · ${row.kind === "almanac" ? "Reminder" : "Session Loop"}`,
-                                run: () => agentChange(row, "delete"),
-                              });
-                            }}
-                          />
-                        </DataRow>
-                      ))}
-                    </DataList>
-                  </>
-                ) : null}
-              </section>
-            ))
-          : null}
-      </section>
-      <aside className="wf-muted">
-        Private Local schedules are unavailable through this App connection.
-        Unjoined Local Agents require the person’s private Local-owner
-        capability; they are not represented by an empty Agent list.
-      </aside>
+                      <button
+                        type="button"
+                        className="wf-schedule-open"
+                        data-schedule-key={row.key}
+                        aria-label={row.shown.title}
+                        onClick={() => {
+                          setSelectedKey(row.key);
+                        }}
+                      >
+                        <span className="wf-schedule-sigil">
+                          <Sigil name={row.shown.kindSigil} size={24} />
+                        </span>
+                        <strong className="wf-schedule-title">
+                          {row.shown.title}
+                        </strong>
+                        <Status
+                          glyph="dot"
+                          size="compact"
+                          label={row.shown.status.label}
+                          tone={row.shown.status.tone}
+                        />
+                        <span className="wf-muted wf-schedule-line">
+                          {row.shown.line}
+                        </span>
+                      </button>
+                    </DataRow>
+                  ))}
+                </DataList>
+              )}
+            </section>
+          ))}
+          {agents.kind === "loading" ? <p role="status">Loading…</p> : null}
+          {agents.kind === "unavailable" ? (
+            <p role="alert">{agents.message}</p>
+          ) : null}
+          {agents.kind === "ready" && agents.rows.length === 0 ? (
+            <p>No Agents yet.</p>
+          ) : null}
+        </div>
+        {selected ? (
+          <ScheduleInfo
+            key={selected.key}
+            entry={selected}
+            pending={pending}
+            notice={notice}
+            error={error}
+            onClose={closeInfo}
+            onAction={(action) => {
+              if (action === "delete") setConfirmation(selected);
+              else void change(selected, action);
+            }}
+          />
+        ) : null}
+      </div>
       <Dialog
         open={confirmation !== null}
         onOpenChange={(open, details) => {
@@ -435,8 +553,8 @@ export function Schedules({ client }: { client: WorkflowClient }) {
           <DialogHeader>
             <DialogTitle>Delete this schedule?</DialogTitle>
             <DialogDescription>
-              {confirmation?.title}. Future occurrences stop; accepted work and
-              history stay.
+              "{confirmation?.shown.title}" won't run again. Runs that already
+              started, and their history, stay.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -447,16 +565,16 @@ export function Schedules({ client }: { client: WorkflowClient }) {
                 setConfirmation(null);
               }}
             >
-              Keep schedule
+              Keep
             </Button>
             <Button
               variant="destructive"
               disabled={busy}
               onClick={() => {
-                if (confirmation !== null) void change(confirmation.run);
+                if (confirmation !== null) void change(confirmation, "delete");
               }}
             >
-              Delete schedule
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

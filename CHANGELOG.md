@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.6.1
+
+### Patch Changes
+
+- Changes since 0.6.0:
+
+  - fix(trellis): use loop sigil and omit unknown starter
+  - fix(trellis): present schedules with native resume controls
+
+- Updated dependencies
+  - @fungi.computer/sigils@0.2.2
+  - @fungi.computer/caps@0.6.0
+
 ## 0.6.0
 
 ### Minor Changes
