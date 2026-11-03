@@ -1,5 +1,21 @@
 # @fungi.computer/trellis
 
+## 0.6.4
+
+### Patch Changes
+
+- Changes since 0.6.3:
+
+  - fix(tests): keep proof evidence and logs out of the operator's home
+
+- Updated dependencies
+  - @fungi.computer/caps@0.7.1
+  - @fungi.computer/braid@0.4.3
+  - @fungi.computer/shiitake-extensions@0.6.3
+  - @fungi.computer/agar@0.7.1
+  - @fungi.computer/puffball@0.5.1
+  - @fungi.computer/workflows-wire@0.4.3
+
 ## 0.6.3
 
 ### Patch Changes
