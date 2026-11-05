@@ -1,5 +1,17 @@
 # @fungi.computer/trellis
 
+## 0.7.0
+
+### Minor Changes
+
+- Changes since 0.6.5:
+
+  - feat(front-doors): lead with the local try-it path and an install-now button
+
+### Patch Changes
+
+- @fungi.computer/shiitake-extensions@0.6.5
+
 ## 0.6.5
 
 ### Patch Changes
