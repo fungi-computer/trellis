@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/maosaico@0.1.1
+  - @fungi.computer/caps@0.7.1
+  - @fungi.computer/shiitake-extensions@0.6.6
+
 ## 0.7.0
 
 ### Minor Changes
