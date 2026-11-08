@@ -1,5 +1,21 @@
 # @fungi.computer/trellis
 
+## 0.9.0
+
+### Minor Changes
+
+- Changes since 0.8.0:
+
+  - fix(trellis): keep the template failure's cause
+  - feat(trellis): welcome a new Team, ask for Git access once, name template
+    causes
+  - fix(trellis): pass onChooseComputer to the window proof
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.0
+
 ## 0.8.0
 
 ### Minor Changes

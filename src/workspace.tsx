@@ -2,7 +2,14 @@ import type { HostUi } from "@fungi.computer/agar";
 import * as z from "zod";
 import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
+import { SetupNotice } from "@fungi.computer/caps/blocks/setup-notice";
 import { Button } from "@fungi.computer/caps/components/button";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@fungi.computer/caps/components/tabs";
 import { ActionRow } from "@fungi.computer/caps/components/action-row";
 import { DataList, DataRow } from "@fungi.computer/caps/components/data-list";
 import { useChrome, type ChromeCrumb } from "./chrome.js";
@@ -16,6 +23,7 @@ import type { OpenInApp } from "./runs/run-timeline.js";
 import { Triggers } from "./triggers/triggers.js";
 import { Templates } from "./templates/templates.js";
 import { Schedules } from "./schedules/schedules.js";
+import { Welcome } from "./welcome.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
@@ -158,6 +166,25 @@ export function WorkflowWorkspace({
         : null,
     [client, editorWorkflowId, refreshLibrary],
   );
+  // One consent covers everything Trellis does with the library: save, publish and arm.
+  const [approving, setApproving] = useState(false);
+  const approveGit = () => {
+    if (!permissions) return;
+    setApproving(true);
+    permissions
+      .requestAppPermissions({
+        git: ["git.repository"],
+        workflows: ["workflow.publish", "workflow.arm"],
+      })
+      .then((outcome) => {
+        setApproving(false);
+        if (outcome !== "declined") refreshLibrary();
+      })
+      .catch((cause: unknown) => {
+        setApproving(false);
+        setError(new Error("App permissions could not be opened.", { cause }));
+      });
+  };
   async function create() {
     setBusy(true);
     setError(null);
@@ -177,6 +204,20 @@ export function WorkflowWorkspace({
     setScope({ kind: "all-runs" });
     setSelectedRun(null);
   };
+  // A Team with no workflows opens on what Trellis is for, not an empty run list.
+  const showWelcome =
+    scope.kind === "all-runs" &&
+    selectedRun === null &&
+    !needsGit &&
+    !error &&
+    Array.isArray(library) &&
+    workflows.length === 0;
+  const sections = [
+    { id: "all-runs", label: "Runs" },
+    { id: "templates", label: "Templates" },
+    { id: "all-workflows", label: "Workflows" },
+    { id: "schedules", label: "Schedules" },
+  ] as const;
   const trellis: ChromeCrumb = { id: "home", label: "Trellis", select: home };
   const scopeCrumb: ChromeCrumb = {
     id: "scope",
@@ -305,33 +346,6 @@ export function WorkflowWorkspace({
           onDialog={setShareDialog}
         />
       ) : null}
-      {!viewingSchedules && needsGit ? (
-        <p role="status" className="wf-page">
-          Trellis keeps your workflows in Git. Allow Git access to see and save
-          them.{" "}
-          {permissions ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void permissions
-                  .requestAppPermissions({})
-                  .then((outcome) => {
-                    if (outcome !== "declined") refreshLibrary();
-                  })
-                  .catch((cause: unknown) => {
-                    setError(
-                      new Error("App permissions could not be opened.", {
-                        cause,
-                      }),
-                    );
-                  });
-              }}
-            >
-              Review permissions
-            </Button>
-          ) : null}
-        </p>
-      ) : null}
       {!viewingSchedules && error ? (
         <p role="alert" className="wf-page">
           {error.message}{" "}
@@ -347,28 +361,63 @@ export function WorkflowWorkspace({
           )}
         </p>
       ) : null}
-      {scope.kind === "all-workflows" ? (
+      {scope.kind !== "workflow" ? (
+        <Tabs
+          className="wf-sections"
+          value={scope.kind}
+          onValueChange={(id) => {
+            scopeCrumb.select?.(id);
+          }}
+        >
+          <TabsList aria-label="Trellis sections">
+            {sections.map(({ id, label }) => (
+              <TabsTrigger key={id} value={id}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      ) : null}
+      {needsGit &&
+      (scope.kind === "all-runs" || scope.kind === "all-workflows") ? (
+        <main className="wf-page">
+          <SetupNotice
+            variant="panel"
+            need="Trellis needs Git access to save your workflows"
+            cause="Your workflows live in Git, so each one is saved and versioned."
+            waitingFor="your approval"
+            fix={{
+              label: "Approve",
+              onSelect: approveGit,
+              pending: approving,
+            }}
+          />
+        </main>
+      ) : null}
+      {scope.kind === "all-workflows" && !needsGit ? (
         <main className="wf-page">
           <h1>All workflows</h1>
-          {!library && !needsGit ? (
-            <p role="status">
-              {slow
-                ? "Loading is taking longer than usual. You can keep waiting or retry."
-                : "Loading workflows…"}
-              {slow ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setAttempt((value) => value + 1);
-                  }}
-                >
-                  Retry
-                </Button>
-              ) : null}
-            </p>
+          {!library ? (
+            <LoadingState
+              message={
+                slow
+                  ? "Loading is taking longer than usual."
+                  : "Loading workflows…"
+              }
+            />
+          ) : null}
+          {slow && !library ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Retry
+            </Button>
           ) : null}
           {library && !Array.isArray(library) ? (
-            <p role="status">Finding your workflows…</p>
+            <LoadingState message="Finding your workflows…" />
           ) : null}
           {Array.isArray(library) && workflows.length === 0 ? (
             <p>Create your first workflow</p>
@@ -409,7 +458,15 @@ export function WorkflowWorkspace({
           />
         ) : null}
       </div>
-      {scope.kind === "all-runs" ||
+      {showWelcome ? (
+        <Welcome
+          client={client}
+          onUse={choose}
+          onBlank={() => void create()}
+          creating={busy}
+        />
+      ) : null}
+      {(scope.kind === "all-runs" && !needsGit && !showWelcome) ||
       (scope.kind === "workflow" && tool === "runs") ? (
         <Runs
           client={client}
@@ -428,7 +485,15 @@ export function WorkflowWorkspace({
         <Triggers client={client} workflowId={workflowId} />
       ) : null}
       {scope.kind === "templates" ? (
-        <Templates client={client} onUse={choose} />
+        <Templates
+          client={client}
+          onUse={choose}
+          blockedReason={
+            needsGit
+              ? "Approve Git access first, so the workflow can be saved."
+              : undefined
+          }
+        />
       ) : null}
       {viewingSchedules ? (
         <Schedules
