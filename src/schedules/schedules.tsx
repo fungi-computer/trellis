@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppAgent } from "@fungi.computer/agar/agents";
+import { EmptyState } from "@fungi.computer/caps/blocks/empty-state";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { Button } from "@fungi.computer/caps/components/button";
 import {
   DataList,
@@ -208,7 +210,13 @@ function ScheduleInfo({
 }
 
 /** One window-local read of native owners, never scheduling or reconstructing work. */
-export function Schedules({ client }: { client: WorkflowClient }) {
+export function Schedules({
+  client,
+  onOpenWorkflows,
+}: {
+  client: WorkflowClient;
+  onOpenWorkflows: () => void;
+}) {
   const [workflow, setWorkflow] = useState<Read<WorkflowSchedule>>({
     kind: "loading",
   });
@@ -358,6 +366,12 @@ export function Schedules({ client }: { client: WorkflowClient }) {
       : []),
   ];
   const entries = groups.flatMap((group) => group.entries);
+  // Nothing is scheduled anywhere and every read succeeded: teach the first step.
+  const nothingScheduled =
+    workflow.kind === "ready" &&
+    agents.kind === "ready" &&
+    entries.length === 0 &&
+    agents.rows.every(({ page }) => page.kind === "ready");
   const selected =
     selectedKey === undefined
       ? wide
@@ -442,9 +456,9 @@ export function Schedules({ client }: { client: WorkflowClient }) {
       <header className="wf-schedules-heading">
         <div>
           <h1>Schedules</h1>
-          <p className="wf-muted">
-            Reminders, Session Loops and Workflow schedules.
-          </p>
+          {nothingScheduled ? null : (
+            <p className="wf-muted">Everything that runs on a timer.</p>
+          )}
         </div>
         <IconButton
           aria-label="Refresh schedules"
@@ -463,65 +477,77 @@ export function Schedules({ client }: { client: WorkflowClient }) {
       {!selected && error ? <p role="alert">{error}</p> : null}
       <div className="wf-schedules-body">
         <div className="wf-schedules-list">
-          {groups.map((group) => (
-            <section key={group.key} aria-label={group.label}>
-              <DataListHeading
-                level={2}
-                aside={group.viewOnly ? "View only" : undefined}
-              >
-                {group.name}
-              </DataListHeading>
-              {group.page.kind === "loading" ? (
-                <p role="status">Loading…</p>
-              ) : group.page.kind === "unavailable" ? (
-                <p role="alert">{group.page.message}</p>
-              ) : group.entries.length === 0 ? (
-                <p>{group.empty}</p>
-              ) : (
-                <DataList aria-label={group.name + " schedule registrations"}>
-                  {group.entries.map((row) => (
-                    <DataRow
-                      key={row.key}
-                      className="wf-schedule-row"
-                      aria-current={selected?.key === row.key || undefined}
-                    >
-                      <button
-                        type="button"
-                        className="wf-schedule-open"
-                        data-schedule-key={row.key}
-                        aria-label={row.shown.title}
-                        onClick={() => {
-                          setSelectedKey(row.key);
-                        }}
+          {nothingScheduled ? (
+            <EmptyState
+              variant="quiet"
+              title="Nothing scheduled"
+              description="Schedules run a workflow on a timer. Add one from a workflow's trigger."
+              actions={
+                <Button variant="primary" onClick={onOpenWorkflows}>
+                  Open workflows
+                </Button>
+              }
+            />
+          ) : (
+            groups.map((group) => (
+              <section key={group.key} aria-label={group.label}>
+                <DataListHeading
+                  level={2}
+                  aside={group.viewOnly ? "View only" : undefined}
+                >
+                  {group.name}
+                </DataListHeading>
+                {group.page.kind === "loading" ? (
+                  <LoadingState message="Loading schedules…" />
+                ) : group.page.kind === "unavailable" ? (
+                  <p role="alert">{group.page.message}</p>
+                ) : group.entries.length === 0 ? (
+                  <p>{group.empty}</p>
+                ) : (
+                  <DataList aria-label={group.name + " schedule registrations"}>
+                    {group.entries.map((row) => (
+                      <DataRow
+                        key={row.key}
+                        className="wf-schedule-row"
+                        aria-current={selected?.key === row.key || undefined}
                       >
-                        <span className="wf-schedule-sigil">
-                          <Sigil name={row.shown.kindSigil} size={24} />
-                        </span>
-                        <strong className="wf-schedule-title">
-                          {row.shown.title}
-                        </strong>
-                        <Status
-                          glyph="dot"
-                          size="compact"
-                          label={row.shown.status.label}
-                          tone={row.shown.status.tone}
-                        />
-                        <span className="wf-muted wf-schedule-line">
-                          {row.shown.line}
-                        </span>
-                      </button>
-                    </DataRow>
-                  ))}
-                </DataList>
-              )}
-            </section>
-          ))}
-          {agents.kind === "loading" ? <p role="status">Loading…</p> : null}
+                        <button
+                          type="button"
+                          className="wf-schedule-open"
+                          data-schedule-key={row.key}
+                          aria-label={row.shown.title}
+                          onClick={() => {
+                            setSelectedKey(row.key);
+                          }}
+                        >
+                          <span className="wf-schedule-sigil">
+                            <Sigil name={row.shown.kindSigil} size={24} />
+                          </span>
+                          <strong className="wf-schedule-title">
+                            {row.shown.title}
+                          </strong>
+                          <Status
+                            glyph="dot"
+                            size="compact"
+                            label={row.shown.status.label}
+                            tone={row.shown.status.tone}
+                          />
+                          <span className="wf-muted wf-schedule-line">
+                            {row.shown.line}
+                          </span>
+                        </button>
+                      </DataRow>
+                    ))}
+                  </DataList>
+                )}
+              </section>
+            ))
+          )}
+          {agents.kind === "loading" ? (
+            <LoadingState message="Loading schedules…" />
+          ) : null}
           {agents.kind === "unavailable" ? (
             <p role="alert">{agents.message}</p>
-          ) : null}
-          {agents.kind === "ready" && agents.rows.length === 0 ? (
-            <p>No Agents yet.</p>
           ) : null}
         </div>
         {selected ? (

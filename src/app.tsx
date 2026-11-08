@@ -1,6 +1,8 @@
 import { applyTheme, getTheme } from "@fungi.computer/stipe/theme";
 import { AppError, connectApp, type AppRoot } from "@fungi.computer/agar";
 import { useAppContext, type AppMountState } from "@fungi.computer/agar/react";
+import { Loader } from "@fungi.computer/caps/components/loader";
+import { Sigil } from "@fungi.computer/sigils";
 import { useEffect, useMemo, useState } from "react";
 import { ChromeProvider } from "./chrome.js";
 import { WorkflowWorkspace } from "./workspace.js";
@@ -142,10 +144,14 @@ export function WorkflowView({ app }: { app: AppRoot | null }) {
               openRequest={openRequest}
             />
           ) : (
-            <main className="wf-page">
-              <h1>Trellis</h1>
-              <p>Open Trellis from your Team to edit and run workflows.</p>
-            </main>
+            <div
+              role="status"
+              className="fixed inset-0 flex flex-col items-center justify-center gap-3 text-sm text-(--stipe-fg-muted)"
+            >
+              <Sigil name="trellis" size={32} />
+              <Loader decorative size="sm" />
+              <span>Opening Trellis…</span>
+            </div>
           )}
         </div>
       </ChromeProvider>

@@ -430,7 +430,14 @@ export function WorkflowWorkspace({
       {scope.kind === "templates" ? (
         <Templates client={client} onUse={choose} />
       ) : null}
-      {viewingSchedules ? <Schedules client={client} /> : null}
+      {viewingSchedules ? (
+        <Schedules
+          client={client}
+          onOpenWorkflows={() => {
+            setScope({ kind: "all-workflows" });
+          }}
+        />
+      ) : null}
     </>
   );
 }

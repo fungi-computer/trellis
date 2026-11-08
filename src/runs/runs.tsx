@@ -534,7 +534,7 @@ export function Runs({
         />
       ) : showDetail ? (
         <EmptyState
-          variant="panel"
+          variant="quiet"
           title="Choose a run"
           description="Select a run from the list to see what happened."
         />

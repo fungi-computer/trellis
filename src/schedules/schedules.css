@@ -21,6 +21,9 @@
 .wf-schedule-info h2 {
   margin: 0;
 }
+.wf-page.wf-schedules .wf-schedules-heading h1 {
+  font-weight: 600;
+}
 .wf-schedules p {
   margin-block: var(--spacing-xs);
 }
