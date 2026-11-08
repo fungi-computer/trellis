@@ -1,5 +1,24 @@
 # @fungi.computer/trellis
 
+## 0.8.0
+
+### Minor Changes
+
+- Changes since 0.7.4:
+
+  - feat(agar): first-run setup facts, openSetup, more permission families
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.9.0
+  - @fungi.computer/caps@0.9.0
+  - @fungi.computer/braid@0.4.7
+  - @fungi.computer/workflows-wire@0.4.7
+  - @fungi.computer/puffball@0.5.5
+  - @fungi.computer/shiitake-extensions@0.6.10
+
 ## 0.7.4
 
 ### Patch Changes
