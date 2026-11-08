@@ -403,6 +403,9 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           if (controller.signal.aborted) return;
           setPublicationPaused(false);
           setPublishedVersion(version);
+          // The next step after publishing is running it: show that panel.
+          setPane("run");
+          setReveal((value) => value + 1);
           state.refreshHistory();
           state.refreshCatalog();
         },
@@ -488,11 +491,13 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
             {
               id: "run",
               label: "Run",
-              icon: "play" as const,
-              variant: "ghost" as const,
+              variant:
+                runVersion === undefined
+                  ? ("ghost" as const)
+                  : ("outline" as const),
               disabled: runVersion === undefined,
               run: () => {
-                setPane(pane === "run" ? "node" : "run");
+                setPane("run");
                 setReveal((value) => value + 1);
               },
             },
@@ -535,6 +540,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     state.restoreNotice,
     state.restoreError,
     publishError,
+    publishedVersion !== null,
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
@@ -591,6 +597,11 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 className="wf-bar-note"
               >
                 {publishError}
+              </p>
+            ) : null}
+            {publishedVersion !== null && !readOnly && !publishError ? (
+              <p role="status" className="wf-muted wf-bar-note">
+                Published v{publishedVersion}. Run it from the Run panel.
               </p>
             ) : null}
             {runPanel && runVersion === undefined ? (

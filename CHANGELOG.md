@@ -1,5 +1,13 @@
 # @fungi.computer/trellis
 
+## 0.9.2
+
+### Patch Changes
+
+- Changes since 0.9.1:
+
+  - fix(trellis): publish success, labelled Run, catalog retry (#377)
+
 ## 0.9.1
 
 ### Patch Changes

@@ -176,6 +176,7 @@ export function useDraft(store: DraftStore) {
         .join(",")
     : "";
   const draftLoaded = draft !== null;
+  const catalogRetry = useRef<string | null>(null);
   useEffect(() => {
     // Wait for the draft: it names the Apps whose ports are needed, so one
     // catalog read (the index, then each named App's ports in parallel)
@@ -189,6 +190,7 @@ export function useDraft(store: DraftStore) {
     void store.readCatalog(neededAppIds).then(
       (loaded) => {
         if (!active) return;
+        catalogRetry.current = null;
         setCatalogLoading(false);
         discovery.current = { store, value: loaded };
         // Discovery refresh never replaces local edits or their revision.
@@ -204,10 +206,16 @@ export function useDraft(store: DraftStore) {
         );
       },
       (cause: unknown) => {
-        if (active) {
-          setCatalogError(cause);
-          setCatalogLoading(false);
+        if (!active) return;
+        // A dropped connection often clears on its own: read once more
+        // before telling the person the catalog is unavailable.
+        if (catalogRetry.current !== neededAppIdsKey) {
+          catalogRetry.current = neededAppIdsKey;
+          setCatalogAttempt((attempt) => attempt + 1);
+          return;
         }
+        setCatalogError(cause);
+        setCatalogLoading(false);
       },
     );
     return () => {

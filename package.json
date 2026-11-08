@@ -1,6 +1,6 @@
 {
   "name": "@fungi.computer/trellis",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "scripts": {
     "build": "vite build && tsc -p backend/tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit",
