@@ -1,5 +1,12 @@
 # @fungi.computer/trellis
 
+## 0.10.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.3
+
 ## 0.10.4
 
 ### Patch Changes
