@@ -1,4 +1,5 @@
-import type { HostUi } from "@fungi.computer/agar";
+import type { AppRoot, HostUi } from "@fungi.computer/agar";
+import { useWindowStatus } from "@fungi.computer/agar/react";
 import * as z from "zod";
 import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +51,7 @@ export function WorkflowWorkspace({
   browserActions,
   permissions,
   openRequest,
+  statusApp = null,
 }: {
   client: WorkflowClient;
   initialScope?: WorkflowScope;
@@ -59,6 +61,8 @@ export function WorkflowWorkspace({
   /** The host's permission consent; the library needs approved Git access. */
   permissions?: Pick<HostUi, "requestAppPermissions">;
   openRequest?: AppOpenRequest | null;
+  /** The App whose window status bar reports the library. */
+  statusApp?: Pick<AppRoot, "ui"> | null;
 }) {
   const [library, setLibrary] = useState<Awaited<
     ReturnType<WorkflowClient["listWorkflows"]>
@@ -199,6 +203,30 @@ export function WorkflowWorkspace({
     }
   }
   const workflows = Array.isArray(library) ? library : [];
+  useWindowStatus(
+    statusApp,
+    needsGit
+      ? [
+          {
+            id: "library",
+            kind: "text",
+            text: "Needs Git access",
+            tone: "warning",
+          },
+        ]
+      : Array.isArray(library)
+        ? [
+            {
+              id: "library",
+              kind: "text",
+              text:
+                workflows.length === 0
+                  ? "No workflows yet"
+                  : `${String(workflows.length)} ${workflows.length === 1 ? "workflow" : "workflows"}`,
+            },
+          ]
+        : [],
+  );
   const title = workflows.find((item) => item.workflowId === workflowId)?.title;
   const home = () => {
     setScope({ kind: "all-runs" });
@@ -263,9 +291,11 @@ export function WorkflowWorkspace({
       if (item) choose(item.workflowId);
     },
   };
+  // Runs is the home view and its tab is already showing, so it needs no
+  // crumb of its own; every other scope and each workflow adds one.
   const crumbs: readonly ChromeCrumb[] = [
     trellis,
-    scopeCrumb,
+    ...(scope.kind === "all-runs" ? [] : [scopeCrumb]),
     ...(scope.kind === "workflow"
       ? [
           {

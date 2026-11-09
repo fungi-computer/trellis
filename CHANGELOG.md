@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.10.0
+
+### Minor Changes
+
+- Changes since 0.9.2:
+
+  - feat(trellis): report the library in the footer and drop the redundant All
+    runs crumb (#390)
+
 ## 0.9.2
 
 ### Patch Changes
