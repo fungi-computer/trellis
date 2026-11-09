@@ -11,7 +11,8 @@ import { Disclosure } from "@fungi.computer/caps/components/disclosure";
 import { Surface } from "@fungi.computer/caps/components/surface";
 import { WorkflowMark } from "./mark.js";
 import { humanTitle } from "./graph-presentation.js";
-import { Status } from "@fungi.computer/caps/components/status";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { validate, type Node, type PortRef } from "@fungi.computer/braid";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -158,15 +159,22 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     return (
       <main className="wf-pane-body">
         <ChromeSlot active={active} parts={navigation} />
-        <Status
-          label={failed ? "Workflow could not be loaded" : "Loading workflow…"}
-          tone={failed ? "error" : "neutral"}
-        />
-        {failed || slow ? (
+        {failed ? (
+          <FailureLine
+            message="Workflow could not be loaded."
+            retryLabel={readOnly ? "Return to draft" : "Retry"}
+            onRetry={() => {
+              if (readOnly) state.setVersion(undefined);
+              else state.reload();
+            }}
+          />
+        ) : (
+          <LoadingState message="Loading workflow…" />
+        )}
+        {!failed && slow ? (
           <p role="status">
-            {failed
-              ? "Try loading this workflow again."
-              : "Loading this workflow is taking longer than usual. You can keep waiting or retry."}
+            Loading this workflow is taking longer than usual. You can keep
+            waiting or retry.
             <Button
               variant="ghost"
               onClick={() => {
@@ -508,80 +516,91 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   };
   if (validLabel === "Valid")
     validStatus = { ...validStatus, presentation: "bead" };
-  const chromeParts: ChromeParts = {
-    ...navigation,
-    primary: [
-      ...(runPanel
+  const commands: NonNullable<ChromeParts["primary"]> = [
+    ...(runPanel
+      ? [
+          {
+            id: "run",
+            label: "Run",
+            variant:
+              runVersion === undefined
+                ? ("ghost" as const)
+                : unchangedPublished || readOnly
+                  ? ("primary" as const)
+                  : ("outline" as const),
+            disabled: runVersion === undefined,
+            run: () => {
+              setAutoRunVersion(null);
+              setPane("run");
+              setReveal((value) => value + 1);
+            },
+          },
+        ]
+      : []),
+    ...(readOnly && store.restore
+      ? [
+          {
+            id: "restore",
+            label: "Restore as draft",
+            variant: "primary" as const,
+            disabled: state.saving || state.restoring || state.conflict,
+            run: () => {
+              setConfirmRestore(true);
+            },
+          },
+        ]
+      : store.publish && !readOnly
         ? [
             {
-              id: "run",
-              label: "Run",
-              variant:
-                runVersion === undefined
-                  ? ("ghost" as const)
-                  : unchangedPublished || readOnly
-                    ? ("primary" as const)
-                    : ("outline" as const),
-              disabled: runVersion === undefined,
+              id: "publish",
+              label: publishing
+                ? "Publishing…"
+                : publicationPaused
+                  ? "Check status"
+                  : publishError
+                    ? "Try again"
+                    : "Publish",
+              variant: unchangedPublished
+                ? ("ghost" as const)
+                : runPanel
+                  ? ("outline" as const)
+                  : ("primary" as const),
+              disabled: publishDisabled,
               run: () => {
-                setAutoRunVersion(null);
-                setPane("run");
-                setReveal((value) => value + 1);
+                publish();
               },
             },
+            ...(runPanel && !unchangedPublished
+              ? [
+                  {
+                    id: "publish-run",
+                    label: publishing
+                      ? "Publishing & running…"
+                      : "Publish & run",
+                    variant: "primary" as const,
+                    disabled: publishDisabled,
+                    run: () => {
+                      publish(true);
+                    },
+                  },
+                ]
+              : []),
           ]
         : []),
-      ...(readOnly && store.restore
-        ? [
-            {
-              id: "restore",
-              label: "Restore as draft",
-              variant: "primary" as const,
-              disabled: state.saving || state.restoring || state.conflict,
-              run: () => {
-                setConfirmRestore(true);
-              },
-            },
-          ]
-        : store.publish && !readOnly
-          ? [
-              {
-                id: "publish",
-                label: publishing
-                  ? "Publishing…"
-                  : publicationPaused
-                    ? "Check status"
-                    : publishError
-                      ? "Try again"
-                      : "Publish",
-                variant: unchangedPublished
-                  ? ("ghost" as const)
-                  : runPanel
-                    ? ("outline" as const)
-                    : ("primary" as const),
-                disabled: publishDisabled,
-                run: () => {
-                  publish();
-                },
-              },
-              ...(runPanel && !unchangedPublished
-                ? [
-                    {
-                      id: "publish-run",
-                      label: publishing
-                        ? "Publishing & running…"
-                        : "Publish & run",
-                      variant: "primary" as const,
-                      disabled: publishDisabled,
-                      run: () => {
-                        publish(true);
-                      },
-                    },
-                  ]
-                : []),
-            ]
-          : []),
-    ],
+  ];
+  const primaryId = readOnly
+    ? runPanel
+      ? "run"
+      : "restore"
+    : runPanel
+      ? unchangedPublished || !store.publish
+        ? "run"
+        : "publish-run"
+      : "publish";
+  const chromeParts: ChromeParts = {
+    ...navigation,
+    primary: commands.filter((command) => command.id === primaryId),
+    menu: commands.filter((command) => command.id !== primaryId),
     status: [savedStatus, validStatus],
   };
   const notes = [
@@ -650,8 +669,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
             ) : null}
             {unchangedPublished && !readOnly && !publishError ? (
               <p role="status" className="wf-muted wf-bar-note">
-                Published v{state.matchingPublishedVersion}. Run it from the Run
-                panel.
+                Published v{state.matchingPublishedVersion}.
               </p>
             ) : null}
             {runPanel && runVersion === undefined ? (
@@ -689,6 +707,22 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                   setQuery(event.currentTarget.value);
                 }}
               />
+              {query.trim() !== "" && shown.length === 0 ? (
+                <div className="grid gap-sm">
+                  <p>
+                    No steps match “{query}”. Try another name or browse the
+                    palette.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("");
+                    }}
+                  >
+                    Clear search
+                  </Button>
+                </div>
+              ) : null}
               {Object.keys(document.palette).length === 0 ? (
                 <p className="wf-muted">
                   App methods will appear when the installed App catalog is

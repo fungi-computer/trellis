@@ -3,6 +3,7 @@ import { fillReviewText, reviewAnswerSchema } from "@fungi.computer/braid";
 import { Input } from "@fungi.computer/caps/components/input";
 import { useState } from "react";
 import { Button } from "@fungi.computer/caps/components/button";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import type { WorkflowClient } from "../workflow-client.js";
 import { stepPosition, type Review } from "./run-state.js";
 import { OutputPreview, type ReadMedia } from "./output-preview.js";
@@ -53,7 +54,18 @@ export function ReviewDock({
         answer: decoded.value,
       });
       if (result === "accepted") onAnswered();
-      else setError(new Error(result));
+      else
+        setError(
+          new Error(
+            {
+              denied: "You don't have permission to answer this review.",
+              not_waiting:
+                "This review has already been answered. Refresh the run to see what happened.",
+              invalid:
+                "This answer was not accepted. Check your choice and note, then try again.",
+            }[result],
+          ),
+        );
     } catch (cause) {
       setError(new Error("Could not send your answer. Try again.", { cause }));
     } finally {
@@ -116,6 +128,7 @@ export function ReviewDock({
                 className="wf-dock-key"
                 variant={index === 0 ? "primary" : "outline"}
                 disabled={sending}
+                loading={sending}
                 onClick={() => {
                   void answer(option.answer());
                 }}
@@ -140,7 +153,16 @@ export function ReviewDock({
             }}
           />
         ) : null}
-        {error ? <p role="alert">{error.message}</p> : null}
+        {error ? (
+          <FailureLine
+            message={error.message}
+            onRetry={onAnswered}
+            retryLabel="Refresh run"
+            onDismiss={() => {
+              setError(null);
+            }}
+          />
+        ) : null}
       </div>
     </section>
   );

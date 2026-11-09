@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { workflowRunRequestIds } from "@fungi.computer/workflows-wire";
 import * as z from "zod";
 import { field, SchemaForm } from "@fungi.computer/caps/form";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import {
   workflowDefinitionSchema,
   parseProjection,
@@ -35,6 +37,7 @@ export function RunWorkflow({
     chats: Awaited<ReturnType<WorkflowClient["chatChoices"]>>;
   } | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!autoRun || !ready || autoSubmitted.current) return;
     const input = workflowInputField(ready.input);
@@ -84,11 +87,19 @@ export function RunWorkflow({
     return () => {
       active = false;
     };
-  }, [client, workflowId, version]);
+  }, [client, workflowId, version, attempt]);
   if (version === undefined)
     return <p>Publish a version before running this workflow.</p>;
-  if (error) return <p role="alert">{error.message}</p>;
-  if (!ready) return <p>Loading published workflow…</p>;
+  if (error)
+    return (
+      <FailureLine
+        message={error.message}
+        onRetry={() => {
+          setAttempt((value) => value + 1);
+        }}
+      />
+    );
+  if (!ready) return <LoadingState message="Loading published workflow…" />;
   const bindings = Object.entries(ready.definition.apps);
   const bindingFields: Record<string, z.ZodString> = {};
   for (const [alias, spec] of bindings) {

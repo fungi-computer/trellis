@@ -5,6 +5,8 @@ import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { SetupNotice } from "@fungi.computer/caps/blocks/setup-notice";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
+import { Sigil } from "@fungi.computer/sigils";
 import { Button } from "@fungi.computer/caps/components/button";
 import {
   Tabs,
@@ -377,19 +379,9 @@ export function WorkflowWorkspace({
         />
       ) : null}
       {!viewingSchedules && error ? (
-        <p role="alert" className="wf-page">
-          {error.message}{" "}
-          {library && !Array.isArray(library) ? null : (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setAttempt((value) => value + 1);
-              }}
-            >
-              Retry
-            </Button>
-          )}
-        </p>
+        <div className="wf-page">
+          <FailureLine message={error.message} onRetry={refreshLibrary} />
+        </div>
       ) : null}
       {scope.kind !== "workflow" ? (
         <Tabs
@@ -410,14 +402,15 @@ export function WorkflowWorkspace({
       ) : null}
       {needsGit &&
       (scope.kind === "all-runs" || scope.kind === "all-workflows") ? (
-        <main className="wf-page">
+        <main className="wf-page wf-invitation">
           <SetupNotice
             variant="panel"
             need="Run a sequence of App steps"
             cause="Approve Git access to save and version your workflows."
+            visual={<Sigil name="trellis" size={48} />}
             waitingFor="your approval"
             fix={{
-              label: "Approve",
+              label: "Approve Git access",
               onSelect: approveGit,
               pending: approving,
             }}
@@ -450,7 +443,12 @@ export function WorkflowWorkspace({
             <LoadingState message="Finding your workflows…" />
           ) : null}
           {Array.isArray(library) && workflows.length === 0 ? (
-            <p>Create your first workflow</p>
+            <Welcome
+              client={client}
+              onUse={choose}
+              onBlank={() => void create()}
+              creating={busy}
+            />
           ) : null}
           <DataList aria-label="Workflows">
             {workflows.map((item) => (
@@ -497,7 +495,22 @@ export function WorkflowWorkspace({
           creating={busy}
         />
       ) : null}
-      {(scope.kind === "all-runs" && !needsGit && !showWelcome) ||
+      {scope.kind === "all-runs" &&
+      !needsGit &&
+      !error &&
+      !Array.isArray(library) ? (
+        <main className="wf-page wf-invitation">
+          <LoadingState
+            message={
+              library ? "Finding your workflows…" : "Opening your workflows…"
+            }
+          />
+        </main>
+      ) : null}
+      {(scope.kind === "all-runs" &&
+        Array.isArray(library) &&
+        !needsGit &&
+        !showWelcome) ||
       (scope.kind === "workflow" && tool === "runs") ? (
         <Runs
           client={client}
@@ -510,10 +523,22 @@ export function WorkflowWorkspace({
           }}
           readMedia={readMedia}
           openIn={openIn}
+          onOpenWorkflows={() => {
+            setScope({ kind: "all-workflows" });
+          }}
+          onOpenEditor={() => {
+            setTool("editor");
+          }}
         />
       ) : null}
       {scope.kind === "workflow" && tool === "triggers" ? (
-        <Triggers client={client} workflowId={workflowId} />
+        <Triggers
+          client={client}
+          workflowId={workflowId}
+          onOpenEditor={() => {
+            setTool("editor");
+          }}
+        />
       ) : null}
       {scope.kind === "templates" ? (
         <Templates

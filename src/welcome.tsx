@@ -23,7 +23,7 @@ export function Welcome({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   return (
-    <main className="wf-page">
+    <section className="wf-page wf-invitation" aria-label="Start a workflow">
       <EmptyState
         variant="panel"
         title="Make your first workflow"
@@ -53,7 +53,14 @@ export function Welcome({
           },
         }))}
       />
-      {failure === null ? null : <FailureLine message={failure} />}
-    </main>
+      {failure === null ? null : (
+        <FailureLine
+          message={failure}
+          onDismiss={() => {
+            setFailure(null);
+          }}
+        />
+      )}
+    </section>
   );
 }

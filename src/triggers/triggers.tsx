@@ -8,6 +8,9 @@ import { Field, FieldSet } from "@fungi.computer/caps/components/field";
 import { Select } from "@fungi.computer/caps/components/select";
 import { Switch } from "@fungi.computer/caps/components/switch";
 import { Status } from "@fungi.computer/caps/components/status";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
+import { EmptyState } from "@fungi.computer/caps/blocks/empty-state";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import type { WorkflowClient } from "../workflow-client.js";
 import type {
   RunDelivery,
@@ -136,10 +139,12 @@ export function Triggers({
   client,
   workflowId,
   control,
+  onOpenEditor,
 }: {
   client: WorkflowClient;
   workflowId: string | null;
   control?: TriggerControl;
+  onOpenEditor?: () => void;
 }) {
   const [loadedControl, setLoadedControl] = useState<TriggerControl | null>(
     null,
@@ -284,29 +289,41 @@ export function Triggers({
   return (
     <main className="wf-page">
       {error ? (
-        <p role="alert">
-          {error}{" "}
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Retry
-          </Button>
-        </p>
+        <FailureLine
+          message={error}
+          onRetry={() => {
+            setAttempt((value) => value + 1);
+          }}
+        />
       ) : null}
       {!workflowId ? (
         <p>Choose a workflow to see its triggers.</p>
       ) : unpublished ? (
-        <p>
-          Publish a version to arm its triggers. Manual runs become available
-          after publishing.
-        </p>
+        <EmptyState
+          title="Choose when this workflow runs"
+          description="Publish from the editor to run it on a click, or add a schedule to run it on a timer."
+          primaryAction={
+            onOpenEditor
+              ? { label: "Open editor", onSelect: onOpenEditor }
+              : undefined
+          }
+        />
       ) : !definition ? (
-        !error && <p>Loading published triggers…</p>
+        !error && <LoadingState message="Loading published triggers…" />
       ) : (
         <>
+          {!definition.triggers?.length ? (
+            <EmptyState
+              variant="quiet"
+              title="Run on a click or a timer"
+              description="Run this published workflow from the editor. Add a schedule there to start it automatically."
+              primaryAction={
+                onOpenEditor
+                  ? { label: "Open editor", onSelect: onOpenEditor }
+                  : undefined
+              }
+            />
+          ) : null}
           {Object.keys(definition.apps).length ? (
             <FieldSet
               legend="Apps for arming"

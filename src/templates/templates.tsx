@@ -141,7 +141,13 @@ export function Templates({
                 <p className="wf-muted">{blockedReason}</p>
               ) : null}
               {failure?.id === template.id ? (
-                <FailureLine message={failure.error.message} />
+                <FailureLine
+                  message={failure.error.message}
+                  onRetry={() => void useTemplate(template)}
+                  onDismiss={() => {
+                    setFailure(null);
+                  }}
+                />
               ) : null}
             </CardContent>
           </Card>

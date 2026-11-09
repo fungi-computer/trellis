@@ -58,6 +58,11 @@ body,
   padding: var(--spacing-md);
   overflow: auto;
 }
+.wf-invitation {
+  width: 100%;
+  max-width: 42rem;
+  margin-inline: auto;
+}
 .wf-page h1,
 .wf-run-list h1 {
   font-size: var(--text-lg);

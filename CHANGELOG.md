@@ -1,5 +1,16 @@
 # @fungi.computer/trellis
 
+## 0.10.4
+
+### Patch Changes
+
+- Changes since 0.10.3:
+
+  - fix(trellis): polish the complete first-use workflow
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.2
+
 ## 0.10.3
 
 ### Patch Changes

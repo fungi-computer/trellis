@@ -1,4 +1,5 @@
 import { useCatalogLoading } from "./catalog-loading.js";
+import * as S from "effect/Schema";
 import { GraphResults, nodeResultsFor } from "./graph-results.js";
 import type { ReadMedia } from "../runs/output-preview.js";
 import type { RunStep } from "../runs/run-state.js";
@@ -7,6 +8,7 @@ import {
   displayEdges,
   inputPurpose,
   nodePresentation,
+  portPresentation,
 } from "./graph-presentation.js";
 import "./graph-presentation.css";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -123,6 +125,20 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
       <p className="wf-node-purpose" title={data.purpose}>
         {data.purpose}
       </p>
+      {data.node?.kind === "transform"
+        ? Object.entries(data.node.fields).flatMap(([key, mapping]) =>
+            "literal" in mapping
+              ? [
+                  <p key={key} className="wf-node-value">
+                    <strong>{portPresentation(key, {}).label}:</strong>{" "}
+                    {S.is(S.String)(mapping.literal)
+                      ? mapping.literal
+                      : JSON.stringify(mapping.literal)}
+                  </p>,
+                ]
+              : [],
+          )
+        : null}
       <div className="wf-ports">
         {(["inputs", "outputs"] as const).map((side) => (
           <ul key={side} className="wf-port-col" aria-label={side}>
@@ -132,6 +148,7 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
                 className="wf-port"
                 data-port={key}
                 data-side={side === "inputs" ? "in" : "out"}
+                title={portPresentation(key, schema).help}
               >
                 <Handle
                   type={side === "inputs" ? "target" : "source"}
@@ -139,11 +156,9 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
                   id={key}
                   className="wf-handle"
                 />
-                <span>{key}</span>
+                <span>{portPresentation(key, schema).label}</span>
                 <span className="wf-port-type">
-                  {schema.format?.replace("fungi:", "") ??
-                    schema.type ??
-                    (key === "after" ? "signal" : "value")}
+                  {portPresentation(key, schema).type}
                 </span>
               </li>
             ))}

@@ -83,6 +83,7 @@ export function InputFields({
   };
   return (
     <FieldSet
+      description="Values you supply when starting a run. Leave empty if this workflow needs none."
       legend={
         <span className="flex flex-wrap items-center justify-between gap-xs">
           <span>{legend}</span>
@@ -479,7 +480,10 @@ export function MappedOutputs({
     ]),
   );
   return (
-    <FieldSet legend="Workflow outputs">
+    <FieldSet
+      legend="Workflow outputs"
+      description="Results returned when the workflow finishes."
+    >
       <DataList aria-label="Mapped workflow outputs">
         {Object.entries(value).map(([name, ref]) => (
           <DataRow key={name}>
@@ -496,7 +500,12 @@ export function MappedOutputs({
           </DataRow>
         ))}
       </DataList>
-      {Object.keys(value).length ? null : <p>No outputs mapped yet.</p>}
+      {Object.keys(value).length ? null : (
+        <p>
+          Connect a step's output to the workflow output on the canvas to return
+          a result.
+        </p>
+      )}
     </FieldSet>
   );
 }

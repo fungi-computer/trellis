@@ -91,6 +91,15 @@
   grid-template-columns: 1fr 1fr;
   padding-block: var(--spacing-2xs);
 }
+.wf-node-value {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .wf-port-col {
   margin: 0;
   padding: 0;

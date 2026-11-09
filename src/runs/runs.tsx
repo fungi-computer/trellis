@@ -18,6 +18,8 @@ import {
 } from "@fungi.computer/caps/components/data-list";
 import { Surface } from "@fungi.computer/caps/components/surface";
 import { EmptyState } from "@fungi.computer/caps/blocks/empty-state";
+import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
+import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import type { WorkflowRunListItem } from "@fungi.computer/workflows-wire";
 import { versionRelativeTime } from "../history/relative-time.js";
 import { nodePorts } from "../editor/graph.js";
@@ -64,18 +66,10 @@ function startedByLabel(
 ): string {
   if (item.source === "manual") {
     if (item.initiatedBy.kind !== "member") return "Unknown";
-    return item.initiatedBy.memberId === viewerId
-      ? "You"
-      : item.initiatedBy.memberId;
+    return item.initiatedBy.memberId === viewerId ? "You" : "Another member";
   }
-  if (item.source === "agent")
-    return item.initiatedBy.kind === "agent"
-      ? `Agent ${item.initiatedBy.agentId} with ${item.initiatedBy.grantorMemberId}'s access`
-      : "Agent";
-  if (item.source === "key")
-    return item.initiatedBy.kind === "key"
-      ? `Key ${item.initiatedBy.keyId} with ${item.initiatedBy.grantorMemberId}'s access`
-      : "Key";
+  if (item.source === "agent") return "An Agent";
+  if (item.source === "key") return "An API key";
   const trigger = definition?.triggers?.find((t) => t.id === item.triggerId);
   if (!trigger) return sourceLabel[item.source];
   if (trigger.on === "schedule") return "schedule";
@@ -107,6 +101,7 @@ function RunDetail({
     (Pick<DraftCatalog, "catalog" | "appDisplay"> & { draft: Draft }) | null
   >(null);
   const [graphError, setGraphError] = useState(false);
+  const [graphAttempt, setGraphAttempt] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState(false);
@@ -143,7 +138,7 @@ function RunDetail({
     return () => {
       active = false;
     };
-  }, [client, item.workflowId, item.commit]);
+  }, [client, item.workflowId, item.commit, graphAttempt]);
   async function cancel() {
     setCancelling(true);
     setCancelError(false);
@@ -242,21 +237,19 @@ function RunDetail({
         ) : null}
       </header>
       {error ? (
-        <p role="alert">
-          Run could not be loaded.{" "}
-          <Button variant="ghost" onClick={refresh}>
-            Retry
-          </Button>
-        </p>
+        <FailureLine message="Run could not be loaded." onRetry={refresh} />
       ) : null}
       {graphError ? (
-        <p role="alert">
-          The published graph or App catalog could not be loaded.
-        </p>
+        <FailureLine
+          message="The steps for this run could not be loaded."
+          onRetry={() => {
+            setGraphAttempt((value) => value + 1);
+          }}
+        />
       ) : null}
       <div className="wf-run-timeline" ref={scroller}>
         {!graph && !graphError ? (
-          <p className="wf-muted">Loading steps…</p>
+          <LoadingState message="Loading steps…" />
         ) : null}
         <RunTimeline items={items} readMedia={readMedia} openIn={openIn} />
         {run?.error !== null && run?.error !== undefined ? (
@@ -362,6 +355,8 @@ export function Runs({
   onSelect,
   readMedia,
   openIn,
+  onOpenWorkflows,
+  onOpenEditor,
 }: {
   client: WorkflowClient;
   workflowId?: string;
@@ -369,6 +364,8 @@ export function Runs({
   onSelect: (id: string, workflowId: string) => void;
   readMedia?: ReadMedia;
   openIn?: OpenInApp;
+  onOpenWorkflows?: () => void;
+  onOpenEditor?: () => void;
 }) {
   const [items, setItems] = useState<WorkflowRunListItem[] | null>(null);
   const [error, setError] = useState(false);
@@ -385,7 +382,7 @@ export function Runs({
   useEffect(() => {
     let active = true;
     // Optional, like chatChoices: a failed read only means "Started by"
-    // shows an id instead of "You" a little longer, never a page failure.
+    // uses a role instead of "You" a little longer, never a page failure.
     void client.viewerId().then(
       (reply) => {
         if (active && "memberId" in reply) setViewerId(reply.memberId);
@@ -441,25 +438,31 @@ export function Runs({
       {showList ? (
         <Surface placement="embedded" size="sm" className="wf-run-list">
           {error ? (
-            <p role="alert">
-              Runs could not be loaded.{" "}
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setAttempt((value) => value + 1);
-                }}
-              >
-                Retry
-              </Button>
-            </p>
+            <FailureLine
+              message="Runs could not be loaded."
+              onRetry={() => {
+                setAttempt((value) => value + 1);
+              }}
+            />
           ) : null}
-          {!items && !error ? <p>Loading runs…</p> : null}
+          {!items && !error ? <LoadingState message="Loading runs…" /> : null}
           {items?.length === 0 ? (
             <EmptyState
               headingLevel={3}
               variant="quiet"
               title="No runs yet"
-              description="Runs from every workflow appear here."
+              description={
+                workflowId
+                  ? "Run this workflow to see each step and its result here."
+                  : "Start a workflow to follow its progress and review its results here."
+              }
+              primaryAction={
+                workflowId && onOpenEditor
+                  ? { label: "Open editor", onSelect: onOpenEditor }
+                  : onOpenWorkflows
+                    ? { label: "Open workflows", onSelect: onOpenWorkflows }
+                    : undefined
+              }
             />
           ) : null}
           {(["needs-you", "running", "finished"] as const).map((section) => {
@@ -532,7 +535,7 @@ export function Runs({
           onStatus={recordStatus}
           viewerId={viewerId}
         />
-      ) : showDetail ? (
+      ) : showDetail && items && items.length > 0 ? (
         <EmptyState
           variant="quiet"
           title="Choose a run"

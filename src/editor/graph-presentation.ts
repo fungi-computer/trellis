@@ -7,6 +7,7 @@ import {
   type Issue,
   type Node,
   type PortRef,
+  type PortSchema,
   type WorkflowDefinition,
 } from "@fungi.computer/braid";
 import { methodFor } from "./graph.js";
@@ -136,6 +137,37 @@ export function humanTitle(id: string) {
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
     .replace(/[._-]+/gu, " ");
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
+/** Port identities stay in the graph; the canvas explains their role to a reader. */
+export function portPresentation(key: string, schema: PortSchema) {
+  const labels = new Map([
+    ["show", "For review"],
+    ["choice", "Your choice"],
+    ["note", "Your note"],
+    ["after", "After step"],
+  ]);
+  const types = new Map([
+    ["string", "text"],
+    ["boolean", "yes / no"],
+    ["integer", "whole number"],
+    ["array", "list"],
+    ["object", "fields"],
+  ]);
+  const type =
+    schema.format?.replace("fungi:", "") ??
+    (schema.type
+      ? (types.get(schema.type) ?? schema.type)
+      : key === "after"
+        ? "signal"
+        : "any value");
+  return {
+    label: labels.get(key) ?? humanTitle(key),
+    type,
+    help:
+      schema.description ??
+      `${humanTitle(key)} carries ${type}. Connect it to another step to pass the value along.`,
+  };
 }
 
 const purposes = {
