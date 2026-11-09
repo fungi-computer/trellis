@@ -71,16 +71,12 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publicationPaused, setPublicationPaused] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
-  const [publishedRevision, setPublishedRevision] = useState<number | null>(
-    null,
-  );
   const [autoRunVersion, setAutoRunVersion] = useState<number | null>(null);
   useEffect(() => {
     setPublishing(false);
     setPublishError(null);
     setPublicationPaused(false);
     setPublishedVersion(null);
-    setPublishedRevision(null);
     setAutoRunVersion(null);
     return () => {
       publication.current?.abort();
@@ -89,7 +85,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const [selected, setSelected] = useState<NodeAddress | null>(null);
   const [selectedPane, setPane] = useState<EditorPane | null>(null);
   const pane =
-    selectedPane ?? (state.draft?.definition.nodes.length ? "node" : "palette");
+    selectedPane ??
+    (state.draft?.definition.nodes.length ? "canvas" : "palette");
   const [reveal, setReveal] = useState(0);
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState(() => new Set(["Control"]));
@@ -98,10 +95,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const runVersion =
     state.version ?? publishedVersion ?? state.versions.at(0)?.version;
   const readOnly = state.version !== undefined;
-  const justPublished =
-    publishedVersion !== null &&
-    publishedRevision === state.document?.revision &&
-    state.draft === state.document.draft;
+  const unchangedPublished = state.matchingPublishedVersion !== undefined;
   const viewedVersion = state.versions.find(
     (version) => version.version === state.version,
   );
@@ -123,7 +117,6 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   }, [loading, failed, store, state.version, loadAttempt]);
   const chooseVersion = (value: string) => {
     setAutoRunVersion(null);
-    if (value === "draft") setPublishedRevision(null);
     setSelected(null);
     setConfirmRestore(false);
     state.setVersion(value === "draft" ? undefined : Number(value));
@@ -141,8 +134,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
         id: "version",
         label: readOnly
           ? `v${String(state.version)}`
-          : justPublished
-            ? `v${String(publishedVersion)}`
+          : unchangedPublished
+            ? `v${String(state.matchingPublishedVersion)}`
             : "Draft",
         siblings: [
           { id: "draft", label: "Current draft" },
@@ -433,7 +426,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           if (controller.signal.aborted) return;
           setPublicationPaused(false);
           setPublishedVersion(version);
-          setPublishedRevision(document.revision);
+          state.confirmPublication(version, draft);
           setAutoRunVersion(runAfterPublish ? version : null);
           // The next step after publishing is running it: show that panel.
           setPane("run");
@@ -526,7 +519,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
               variant:
                 runVersion === undefined
                   ? ("ghost" as const)
-                  : justPublished || readOnly
+                  : unchangedPublished || readOnly
                     ? ("primary" as const)
                     : ("outline" as const),
               disabled: runVersion === undefined,
@@ -561,7 +554,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                     : publishError
                       ? "Try again"
                       : "Publish",
-                variant: justPublished
+                variant: unchangedPublished
                   ? ("ghost" as const)
                   : runPanel
                     ? ("outline" as const)
@@ -571,7 +564,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                   publish();
                 },
               },
-              ...(runPanel && !justPublished
+              ...(runPanel && !unchangedPublished
                 ? [
                     {
                       id: "publish-run",
@@ -596,7 +589,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     state.restoreNotice,
     state.restoreError,
     publishError,
-    justPublished,
+    unchangedPublished,
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
@@ -655,9 +648,10 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 {publishError}
               </p>
             ) : null}
-            {justPublished && !readOnly && !publishError ? (
+            {unchangedPublished && !readOnly && !publishError ? (
               <p role="status" className="wf-muted wf-bar-note">
-                Published v{publishedVersion}. Run it from the Run panel.
+                Published v{state.matchingPublishedVersion}. Run it from the Run
+                panel.
               </p>
             ) : null}
             {runPanel && runVersion === undefined ? (

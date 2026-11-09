@@ -1,4 +1,5 @@
-import { validate } from "@fungi.computer/braid";
+import * as z from "zod";
+import { canonicalJson, validate } from "@fungi.computer/braid";
 import { useEffect, useRef, useState } from "react";
 import type {
   Draft,
@@ -16,6 +17,10 @@ export function useDraft(store: DraftStore) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [debouncedDraft, setDebouncedDraft] = useState<Draft | null>(null);
   const [versions, setVersions] = useState<readonly WorkflowVersion[]>([]);
+  const [latestPublished, setLatestPublished] = useState<{
+    version: number;
+    draft: Draft;
+  } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<unknown>(null);
@@ -82,6 +87,24 @@ export function useDraft(store: DraftStore) {
       active = false;
     };
   }, [store, historyAttempt]);
+  const latestVersion = versions.at(0)?.version;
+  useEffect(() => {
+    let active = true;
+    setLatestPublished(null);
+    if (latestVersion !== undefined)
+      void store.load(latestVersion).then(
+        (loaded) => {
+          if (active && loaded)
+            setLatestPublished({ version: latestVersion, draft: loaded.draft });
+        },
+        () => {
+          // History can still be opened/retried; never claim an unread version matches.
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [store, latestVersion]);
   useEffect(() => {
     let active = true;
     setPublished(null);
@@ -226,6 +249,16 @@ export function useDraft(store: DraftStore) {
     document,
     draft,
     setDraft,
+    matchingPublishedVersion:
+      draft &&
+      latestPublished &&
+      canonicalJson(z.json().parse(draft)) ===
+        canonicalJson(z.json().parse(latestPublished.draft))
+        ? latestPublished.version
+        : undefined,
+    confirmPublication: (version: number, publishedDraft: Draft) => {
+      setLatestPublished({ version, draft: publishedDraft });
+    },
     versions,
     error,
     conflict,

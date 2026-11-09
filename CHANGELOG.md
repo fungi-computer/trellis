@@ -1,5 +1,13 @@
 # @fungi.computer/trellis
 
+## 0.10.3
+
+### Patch Changes
+
+- Changes since 0.10.2:
+
+  - fix(trellis): retain publication status and expose phone panes
+
 ## 0.10.2
 
 ### Patch Changes

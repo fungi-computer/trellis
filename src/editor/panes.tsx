@@ -20,9 +20,10 @@ import {
   WindowActions,
   WindowBody,
 } from "@fungi.computer/caps/components/window";
+import { Button } from "@fungi.computer/caps/components/button";
 import { Minus } from "lucide-react";
 
-export type EditorPane = "palette" | "node" | "run";
+export type EditorPane = "palette" | "canvas" | "node" | "run";
 
 type PaneId = "palette" | "canvas" | "node";
 const titles = {
@@ -89,7 +90,7 @@ export function EditorPanes({
     };
   }, []);
   useEffect(() => {
-    const id = pane === "palette" ? "palette" : "node";
+    const id = pane === "palette" || pane === "canvas" ? pane : "node";
     setSelected(id);
     setCollapsed((current) => current.filter((item) => item !== id));
     setZoomed((current) => (current && current !== id ? null : current));
@@ -135,6 +136,23 @@ export function EditorPanes({
   });
   return (
     <div className="wf-layout" ref={layout} tabIndex={-1}>
+      {narrow ? (
+        <nav className="flex shrink-0 gap-xs pb-xs" aria-label="Editor panes">
+          {(["canvas", "node", "palette"] satisfies PaneId[]).map((id) => (
+            <Button
+              key={id}
+              size="sm"
+              variant={selected === id ? "primary" : "ghost"}
+              aria-pressed={selected === id}
+              onClick={() => {
+                open(id);
+              }}
+            >
+              {id === "node" && pane === "run" ? "Run" : titles[id]}
+            </Button>
+          ))}
+        </nav>
+      ) : null}
       <span className="wf-view-anchor" ref={anchor} aria-hidden />
       {active ? (
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>

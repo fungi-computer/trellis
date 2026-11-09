@@ -413,8 +413,8 @@ export function WorkflowWorkspace({
         <main className="wf-page">
           <SetupNotice
             variant="panel"
-            need="Trellis needs Git access to save your workflows"
-            cause="Your workflows live in Git, so each one is saved and versioned."
+            need="Run a sequence of App steps"
+            cause="Approve Git access to save and version your workflows."
             waitingFor="your approval"
             fix={{
               label: "Approve",
