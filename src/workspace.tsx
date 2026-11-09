@@ -473,12 +473,13 @@ export function WorkflowWorkspace({
             key={editorWorkflowId}
             store={store}
             active={editing}
-            runPanel={(version) => (
+            runPanel={(version, autoRun = false) => (
               <RunWorkflow
                 key={version}
                 client={client}
                 workflowId={editorWorkflowId}
                 version={version}
+                autoRun={autoRun}
                 onRun={(id) => {
                   setSelectedRun(id);
                   setTool("runs");

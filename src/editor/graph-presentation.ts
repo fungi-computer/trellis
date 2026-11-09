@@ -131,10 +131,10 @@ export function bodySteps(graph: Graph) {
   );
 }
 
-function humanTitle(id: string) {
+export function humanTitle(id: string) {
   const words = id
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/[_-]+/gu, " ");
+    .replace(/[._-]+/gu, " ");
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
@@ -161,17 +161,12 @@ export function nodePresentation(
     const raw = method?.description.replace(/\s+/gu, " ").trim();
     const description = raw === "" ? undefined : raw;
     const purpose = description?.split(/(?<=[.!?])\s/u)[0];
-    const words = node.method
-      .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-      .replace(/[_-]+/gu, " ");
     const app = Object.hasOwn(definition.apps, node.app)
       ? appDisplay[definition.apps[node.app].appId]?.displayName
       : undefined;
     // Before the first catalog answer a step is loading, not unavailable.
     const title =
-      method || loading
-        ? words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
-        : "App method unavailable";
+      method || loading ? humanTitle(node.method) : "App method unavailable";
     return {
       title,
       purpose: `${app ?? "App"} · ${loading ? "Loading Apps…" : (purpose ?? "Install the declared App to describe this step.")}`,

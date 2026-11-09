@@ -7,8 +7,10 @@ import {
   DataRow,
 } from "@fungi.computer/caps/components/data-list";
 import { SearchInput } from "@fungi.computer/caps/components/input";
+import { Disclosure } from "@fungi.computer/caps/components/disclosure";
 import { Surface } from "@fungi.computer/caps/components/surface";
 import { WorkflowMark } from "./mark.js";
+import { humanTitle } from "./graph-presentation.js";
 import { Status } from "@fungi.computer/caps/components/status";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { validate, type Node, type PortRef } from "@fungi.computer/braid";
@@ -36,7 +38,7 @@ import "./editor.css";
 
 export type WorkflowEditorProps = {
   store: DraftStore;
-  runPanel?: (version: number | undefined) => ReactNode;
+  runPanel?: (version: number | undefined, autoRun?: boolean) => ReactNode;
   /** Only the editor on screen adds its crumbs and commands to the header. */
   active: boolean;
 };
@@ -69,24 +71,37 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publicationPaused, setPublicationPaused] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+  const [publishedRevision, setPublishedRevision] = useState<number | null>(
+    null,
+  );
+  const [autoRunVersion, setAutoRunVersion] = useState<number | null>(null);
   useEffect(() => {
     setPublishing(false);
     setPublishError(null);
     setPublicationPaused(false);
     setPublishedVersion(null);
+    setPublishedRevision(null);
+    setAutoRunVersion(null);
     return () => {
       publication.current?.abort();
     };
   }, [store]);
   const [selected, setSelected] = useState<NodeAddress | null>(null);
-  const [pane, setPane] = useState<EditorPane>("palette");
+  const [selectedPane, setPane] = useState<EditorPane | null>(null);
+  const pane =
+    selectedPane ?? (state.draft?.definition.nodes.length ? "node" : "palette");
   const [reveal, setReveal] = useState(0);
   const [query, setQuery] = useState("");
+  const [openGroups, setOpenGroups] = useState(() => new Set(["Control"]));
   const [refusal, setRefusal] = useState<string | null>(null);
   const flow = useReactFlow();
   const runVersion =
     state.version ?? publishedVersion ?? state.versions.at(0)?.version;
   const readOnly = state.version !== undefined;
+  const justPublished =
+    publishedVersion !== null &&
+    publishedRevision === state.document?.revision &&
+    state.draft === state.document.draft;
   const viewedVersion = state.versions.find(
     (version) => version.version === state.version,
   );
@@ -107,6 +122,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     };
   }, [loading, failed, store, state.version, loadAttempt]);
   const chooseVersion = (value: string) => {
+    setAutoRunVersion(null);
+    if (value === "draft") setPublishedRevision(null);
     setSelected(null);
     setConfirmRestore(false);
     state.setVersion(value === "draft" ? undefined : Number(value));
@@ -122,7 +139,11 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     crumbs: [
       {
         id: "version",
-        label: readOnly ? `v${String(state.version)}` : "Draft",
+        label: readOnly
+          ? `v${String(state.version)}`
+          : justPublished
+            ? `v${String(publishedVersion)}`
+            : "Draft",
         siblings: [
           { id: "draft", label: "Current draft" },
           ...state.versions.map((item) => ({
@@ -186,6 +207,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     } else setRefusal(result.message);
   };
   const choose = (address: NodeAddress | null) => {
+    setAutoRunVersion(null);
     setSelected(address);
     setPane("node");
     setReveal((value) => value + 1);
@@ -214,7 +236,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       Object.entries(methods).map(([method, spec]) => ({
         key: `${appId}/${method}`,
         group: appId,
-        name: method,
+        name: humanTitle(method),
+        method,
         description: spec.description,
         create: (id: string): Node => ({
           id,
@@ -234,6 +257,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "review",
       group: "Control",
       name: "Review",
+      method: null,
       description: "Pause for a human decision",
       create: (id: string): Node => ({
         id,
@@ -249,6 +273,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "wait",
       group: "Control",
       name: "Wait",
+      method: null,
       description: "Wait before continuing",
       create: (id: string): Node => ({ id, kind: "wait", for: 1000 }),
       appId: null,
@@ -257,6 +282,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "condition",
       group: "Control",
       name: "Condition",
+      method: null,
       description: "Choose a branch",
       create: (id: string): Node => ({
         id,
@@ -269,6 +295,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "map",
       group: "Control",
       name: "Map",
+      method: null,
       description: "Apply a graph to each item",
       create: (id: string): Node => ({
         id,
@@ -284,6 +311,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "repeat",
       group: "Control",
       name: "Repeat",
+      method: null,
       description: "Revise an item until a stop condition is met",
       create: (id: string): Node => ({
         id,
@@ -301,6 +329,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "transform",
       group: "Control",
       name: "Transform",
+      method: null,
       description: "Shape values without code",
       create: (id: string): Node => ({ id, kind: "transform", fields: {} }),
       appId: null,
@@ -309,6 +338,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       key: "code",
       group: "Control",
       name: "Code",
+      method: null,
       description: "Reshape mapped JSON",
       create: createCodeNode,
       appId: null,
@@ -381,11 +411,11 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     choose({ graphId, nodeId: node.id });
   };
   const shown = entries.filter((entry) =>
-    `${document.appDisplay[entry.group]?.displayName ?? entry.group} ${entry.name} ${entry.description}`
+    `${document.appDisplay[entry.group]?.displayName ?? entry.group} ${entry.name} ${entry.method ?? ""} ${entry.description}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
-  const publish = () => {
+  const publish = (runAfterPublish = false) => {
     if (!store.publish || (publicationPaused && !store.checkPublication))
       return;
     setPublishing(true);
@@ -403,6 +433,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           if (controller.signal.aborted) return;
           setPublicationPaused(false);
           setPublishedVersion(version);
+          setPublishedRevision(document.revision);
+          setAutoRunVersion(runAfterPublish ? version : null);
           // The next step after publishing is running it: show that panel.
           setPane("run");
           setReveal((value) => value + 1);
@@ -494,9 +526,12 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
               variant:
                 runVersion === undefined
                   ? ("ghost" as const)
-                  : ("outline" as const),
+                  : justPublished || readOnly
+                    ? ("primary" as const)
+                    : ("outline" as const),
               disabled: runVersion === undefined,
               run: () => {
+                setAutoRunVersion(null);
                 setPane("run");
                 setReveal((value) => value + 1);
               },
@@ -526,10 +561,31 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                     : publishError
                       ? "Try again"
                       : "Publish",
-                variant: "primary" as const,
+                variant: justPublished
+                  ? ("ghost" as const)
+                  : runPanel
+                    ? ("outline" as const)
+                    : ("primary" as const),
                 disabled: publishDisabled,
-                run: publish,
+                run: () => {
+                  publish();
+                },
               },
+              ...(runPanel && !justPublished
+                ? [
+                    {
+                      id: "publish-run",
+                      label: publishing
+                        ? "Publishing & running…"
+                        : "Publish & run",
+                      variant: "primary" as const,
+                      disabled: publishDisabled,
+                      run: () => {
+                        publish(true);
+                      },
+                    },
+                  ]
+                : []),
             ]
           : []),
     ],
@@ -540,7 +596,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     state.restoreNotice,
     state.restoreError,
     publishError,
-    publishedVersion !== null,
+    justPublished,
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
@@ -599,7 +655,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 {publishError}
               </p>
             ) : null}
-            {publishedVersion !== null && !readOnly && !publishError ? (
+            {justPublished && !readOnly && !publishError ? (
               <p role="status" className="wf-muted wf-bar-note">
                 Published v{publishedVersion}. Run it from the Run panel.
               </p>
@@ -615,6 +671,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           active={active}
           pane={pane}
           reveal={reveal}
+          paletteInitiallyCollapsed={draft.definition.nodes.length > 0}
           palette={
             <nav className="wf-pane-body" aria-label="Node palette">
               {state.catalogError ? (
@@ -645,19 +702,32 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 </p>
               ) : null}
               {[...new Set(shown.map((entry) => entry.group))].map((group) => (
-                <section key={group}>
-                  <DataListHeading level={3}>
-                    <span className="flex items-center gap-xs">
-                      {document.appDisplay[group] ? (
-                        <WorkflowMark
-                          appIcon={document.appDisplay[group].icon}
-                          appName={document.appDisplay[group].displayName}
-                          kind="app"
-                        />
-                      ) : null}
-                      {document.appDisplay[group]?.displayName ?? group}
-                    </span>
-                  </DataListHeading>
+                <Disclosure
+                  key={group}
+                  open={query.trim() !== "" || openGroups.has(group)}
+                  onOpenChange={(open) => {
+                    setOpenGroups((current) => {
+                      const next = new Set(current);
+                      if (open) next.add(group);
+                      else next.delete(group);
+                      return next;
+                    });
+                  }}
+                  summary={
+                    <DataListHeading level={3}>
+                      <span className="flex items-center gap-xs">
+                        {document.appDisplay[group] ? (
+                          <WorkflowMark
+                            appIcon={document.appDisplay[group].icon}
+                            appName={document.appDisplay[group].displayName}
+                            kind="app"
+                          />
+                        ) : null}
+                        {document.appDisplay[group]?.displayName ?? group}
+                      </span>
+                    </DataListHeading>
+                  }
+                >
                   <DataList density="compact">
                     {shown
                       .filter((entry) => entry.group === group)
@@ -693,18 +763,26 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                             />
                             <span className="grid min-w-0 gap-2xs">
                               <span>{entry.name}</span>
-                              <span
-                                className="wf-muted line-clamp-2 font-normal"
-                                title={entry.description}
-                              >
-                                {entry.description}
-                              </span>
+                              {entry.method === null ? (
+                                <span
+                                  className="wf-muted line-clamp-2 font-normal"
+                                  title={entry.description}
+                                >
+                                  {entry.description}
+                                </span>
+                              ) : null}
                             </span>
                           </Button>
+                          {entry.method !== null ? (
+                            <MethodDetails
+                              method={entry.method}
+                              description={entry.description}
+                            />
+                          ) : null}
                         </DataRow>
                       ))}
                   </DataList>
-                </section>
+                </Disclosure>
               ))}
             </nav>
           }
@@ -759,7 +837,9 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           }
           inspector={
             pane === "run" && runPanel ? (
-              <div className="wf-pane-body">{runPanel(runVersion)}</div>
+              <div className="wf-pane-body">
+                {runPanel(runVersion, runVersion === autoRunVersion)}
+              </div>
             ) : (
               <FieldSet
                 legend={
@@ -815,6 +895,27 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     </main>
   );
 }
+function MethodDetails({
+  method,
+  description,
+}: {
+  method: string;
+  description: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Disclosure
+      size="row"
+      summary="Method details"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <p className="text-xs">{description}</p>
+      <code className="text-xs">{method}</code>
+    </Disclosure>
+  );
+}
+
 export function WorkflowEditor(props: WorkflowEditorProps) {
   return (
     <ReactFlowProvider>

@@ -1,5 +1,20 @@
 # @fungi.computer/trellis
 
+## 0.10.1
+
+### Patch Changes
+
+- Changes since 0.10.0:
+
+  - fix(trellis): explain when a workflow needs no inputs
+  - fix(maosaico): keep initially collapsed panes out of the layout
+  - fix(trellis): collapse the palette when a populated draft finishes loading
+  - fix(trellis): make templates easier to edit, publish and run
+
+- Updated dependencies
+  - @fungi.computer/maosaico@0.1.2
+  - @fungi.computer/caps@0.10.1
+
 ## 0.10.0
 
 ### Minor Changes

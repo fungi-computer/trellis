@@ -39,6 +39,7 @@ export function EditorPanes({
   pane,
   reveal,
   active,
+  paletteInitiallyCollapsed = false,
 }: {
   palette: ReactNode;
   canvas: ReactNode;
@@ -46,6 +47,7 @@ export function EditorPanes({
   pane: EditorPane;
   reveal: number;
   active: boolean;
+  paletteInitiallyCollapsed?: boolean;
 }) {
   const layout = useRef<HTMLDivElement>(null);
   const anchor = useRef<HTMLSpanElement>(null);
@@ -69,7 +71,9 @@ export function EditorPanes({
         }
       : null,
   );
-  const [collapsed, setCollapsed] = useState<PaneId[]>([]);
+  const [collapsed, setCollapsed] = useState<PaneId[]>(() =>
+    paletteInitiallyCollapsed ? ["palette"] : [],
+  );
   const [zoomed, setZoomed] = useState<PaneId | null>(null);
   const [selected, setSelected] = useState<PaneId>("palette");
   const [narrow, setNarrow] = useState(false);

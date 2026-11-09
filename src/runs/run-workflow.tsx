@@ -15,14 +15,19 @@ export function RunWorkflow({
   client,
   workflowId,
   version,
+  autoRun = false,
   onRun,
 }: {
   client: WorkflowClient;
   workflowId: string;
   version: number | undefined;
+  /** Run a newly published version when its defaults need no further choices. */
+  autoRun?: boolean;
   onRun: (id: string) => void;
 }) {
   const request = useRef<{ key: string; id: string } | null>(null);
+  const form = useRef<HTMLDivElement>(null);
+  const autoSubmitted = useRef(false);
   const [ready, setReady] = useState<{
     definition: WorkflowDefinition;
     input: PortSchema;
@@ -30,6 +35,23 @@ export function RunWorkflow({
     chats: Awaited<ReturnType<WorkflowClient["chatChoices"]>>;
   } | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  useEffect(() => {
+    if (!autoRun || !ready || autoSubmitted.current) return;
+    const input = workflowInputField(ready.input);
+    // Required input or an ambiguous App choice stays in the existing run form.
+    if (!input.schema.safeParse(input.defaultValue).success) return;
+    if (
+      Object.values(ready.definition.apps).some(
+        (binding) =>
+          ready.apps.filter((app) => app.appId === binding.appId).length !== 1,
+      )
+    )
+      return;
+    const element = form.current?.querySelector("form");
+    if (!element) return;
+    autoSubmitted.current = true;
+    element.requestSubmit();
+  }, [autoRun, ready]);
   useEffect(() => {
     let active = true;
     setReady(null);
@@ -120,7 +142,7 @@ export function RunWorkflow({
     }),
   ]);
   return (
-    <>
+    <div ref={form} className="grid gap-sm">
       {ready.chats.kind === "unavailable" ? (
         <p>Chats could not be loaded, so this run cannot report to a chat.</p>
       ) : null}
@@ -190,7 +212,7 @@ export function RunWorkflow({
           }
         }}
       />
-    </>
+    </div>
   );
 }
 

@@ -395,6 +395,11 @@ function inputMessages(
 /** Caps owns form timing/errors; Braid owns projection and instance validation. */
 export function workflowInputField(projection: PortSchema) {
   const properties = Object.values(projection.properties ?? {});
+  const noInputs =
+    projection.type === "object" &&
+    properties.length === 0 &&
+    !projection.oneOf &&
+    !projection.anyOf;
   const group = properties.length === 1 ? properties.at(0) : undefined;
   const singleGroup =
     group !== undefined &&
@@ -432,10 +437,13 @@ export function workflowInputField(projection: PortSchema) {
     })
     .meta(
       field<string>({
-        label: singleGroup ? "" : "Inputs",
-        render: (control) => (
-          <InputFields schema={projection} control={control} />
-        ),
+        label: singleGroup || noInputs ? "" : "Inputs",
+        render: (control) =>
+          noInputs ? (
+            <p className="wf-muted">No inputs needed.</p>
+          ) : (
+            <InputFields schema={projection} control={control} />
+          ),
       }),
     );
   return { schema, defaultValue: JSON.stringify(initial(projection)) };

@@ -1,6 +1,6 @@
 {
   "name": "@fungi.computer/trellis",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "scripts": {
     "build": "vite build && tsc -p backend/tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit",
@@ -13,7 +13,7 @@
     "@fungi.computer/braid": "0.4.7",
     "@fungi.computer/cairn": "0.1.0",
     "@fungi.computer/caps": "0.10.1",
-    "@fungi.computer/maosaico": "0.1.1",
+    "@fungi.computer/maosaico": "0.1.2",
     "@fungi.computer/puffball": "0.5.5",
     "@fungi.computer/shiitake-extensions": "0.6.10",
     "@fungi.computer/sigils": "0.3.0",
