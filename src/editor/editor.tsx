@@ -608,7 +608,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     state.restoreNotice,
     state.restoreError,
     publishError,
-    unchangedPublished,
+    publishedVersion !== null && unchangedPublished && !readOnly,
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
@@ -667,9 +667,12 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 {publishError}
               </p>
             ) : null}
-            {unchangedPublished && !readOnly && !publishError ? (
+            {publishedVersion !== null &&
+            unchangedPublished &&
+            !readOnly &&
+            !publishError ? (
               <p role="status" className="wf-muted wf-bar-note">
-                Published v{state.matchingPublishedVersion}.
+                Published.
               </p>
             ) : null}
             {runPanel && runVersion === undefined ? (

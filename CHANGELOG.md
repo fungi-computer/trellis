@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.10.8
+
+### Patch Changes
+
+- Changes since 0.10.7:
+
+  - fix(trellis): treat Git setup as a neutral first step
+  - fix(apps): restore first-step emphasis and empty-state headings
+  - fix(apps): tighten Inkcap Trellis and Bonsai first views
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.5
+
 ## 0.10.7
 
 ### Patch Changes

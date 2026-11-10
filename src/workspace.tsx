@@ -213,7 +213,7 @@ export function WorkflowWorkspace({
             id: "library",
             kind: "text",
             text: "Needs Git access",
-            tone: "warning",
+            tone: "neutral",
           },
         ]
       : Array.isArray(library)
