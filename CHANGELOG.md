@@ -1,5 +1,13 @@
 # @fungi.computer/trellis
 
+## 0.10.12
+
+### Patch Changes
+
+- Changes since 0.10.11:
+
+  - fix(inkcap,trellis): make the strip under the app header 32px
+
 ## 0.10.11
 
 ### Patch Changes

@@ -302,3 +302,8 @@ body,
   font-size: var(--text-xl);
   font-weight: 600;
 }
+
+/* The section tabs under the window header are a 32px strip. */
+.wf-sections [role="tablist"] {
+  --tab-height: 2rem;
+}
