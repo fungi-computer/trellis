@@ -3,7 +3,7 @@
   "definition": {
     "format": "fungi.workflow/v1",
     "title": "Storyboard",
-    "description": "Supply up to twelve beats and optional canon image references for this run. Review each panel with feedback for up to three attempts, optionally animate it, and collect a Markdown contact sheet. Panels and clips stay in Prints. Generation uses Team credit.",
+    "description": "Supply up to twelve beats and optional canon image references for this run. Review each panel with feedback for up to three attempts, optionally animate it, and collect a Markdown contact sheet. Panels and clips stay in Prints. Making the images and clips uses your Team’s credit.",
     "apps": {
       "prints": {
         "appId": "app_prints",

@@ -3,7 +3,7 @@
   "definition": {
     "format": "fungi.workflow/v1",
     "title": "Storyboard + Save to git",
-    "description": "Everything the Storyboard template does, plus a final Save step: clone the chosen branch, write the Markdown contact sheet into it with Inkcap, then commit and push with Shed. Edit the Save step's Git access (shipped as repository \"storyboard\") for your installation.",
+    "description": "Everything the Storyboard template does, plus a final Save step: copy a branch of your repository, write the Markdown contact sheet into it with Inkcap, then save and push it with Shed. Change the Save step's repository (it starts as \"storyboard\") to one of yours.",
     "apps": {
       "prints": {
         "appId": "app_prints",
@@ -374,7 +374,7 @@
         "kind": "app",
         "app": "inkcap",
         "method": "writeFile",
-        "methodDigest": "sha256:5a77e008b0130edc14ce93d9365ca1a192d166ae6a4816134527475eae58aa68",
+        "methodDigest": "sha256:b83f387dfb17efe3176d1f716c4569a13402dd46dced2f4584492622a71de71c",
         "values": {
           "path": {
             "from": {

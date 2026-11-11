@@ -78,7 +78,12 @@ function Step({
             </>
           }
         >
-          <StepOutput step={item.step} readMedia={readMedia} />
+          <StepOutput
+            step={item.step}
+            choiceLabel={item.chose}
+            titled={item.chose !== undefined}
+            readMedia={readMedia}
+          />
         </Disclosure>
         {target === undefined || item.app === undefined ? null : (
           <Button
@@ -107,7 +112,7 @@ function Step({
   );
 }
 
-/** What happened in a run, newest last: App rows with a raw view behind each. */
+/** What happened in a run, newest last: App rows with a raw view behind each; an answered review shows its result open. */
 export function RunTimeline({
   items,
   readMedia,
@@ -138,7 +143,7 @@ export function RunTimeline({
           <Step
             key={item.key}
             item={item}
-            open={opened.has(item.key)}
+            open={opened.has(item.key) !== (item.chose !== undefined)}
             onToggle={() => {
               setOpened((previous) => {
                 const next = new Set(previous);

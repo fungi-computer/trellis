@@ -247,37 +247,6 @@ function RunDetail({
           }}
         />
       ) : null}
-      <div className="wf-run-timeline" ref={scroller}>
-        {!graph && !graphError ? (
-          <LoadingState message="Loading steps…" />
-        ) : null}
-        <RunTimeline items={items} readMedia={readMedia} openIn={openIn} />
-        {run?.error !== null && run?.error !== undefined ? (
-          <OutputError error={run.error} />
-        ) : null}
-        {finished ? (
-          <p className="wf-finish">
-            <NodeStatus
-              state={runBeadState(run)}
-              bare
-              label={run.outcome === "cancelled" ? "cancelled" : run.status}
-            />
-            <span>
-              {run.outcome === "cancelled"
-                ? "Cancelled"
-                : runBeadState(run) === "failed"
-                  ? "Failed"
-                  : `Done${finish.elapsed === undefined ? "" : ` in ${formatDuration(finish.elapsed)}`}`}
-              {finish.apps > 0
-                ? ` · ${String(finish.apps)} ${finish.apps === 1 ? "App" : "Apps"}`
-                : ""}
-              {finish.cost === null
-                ? ""
-                : ` · ${formatMoney(finish.cost / 100_000)}`}
-            </span>
-          </p>
-        ) : null}
-      </div>
       {pending.map(({ review }) => {
         const definition = graph?.draft.definition;
         const candidates = definition
@@ -319,6 +288,37 @@ function RunDetail({
           />
         );
       })}
+      <div className="wf-run-timeline" ref={scroller}>
+        {!graph && !graphError ? (
+          <LoadingState message="Loading steps…" />
+        ) : null}
+        <RunTimeline items={items} readMedia={readMedia} openIn={openIn} />
+        {run?.error !== null && run?.error !== undefined ? (
+          <OutputError error={run.error} />
+        ) : null}
+        {finished ? (
+          <p className="wf-finish">
+            <NodeStatus
+              state={runBeadState(run)}
+              bare
+              label={run.outcome === "cancelled" ? "cancelled" : run.status}
+            />
+            <span>
+              {run.outcome === "cancelled"
+                ? "Cancelled"
+                : runBeadState(run) === "failed"
+                  ? "Failed"
+                  : `Done${finish.elapsed === undefined ? "" : ` in ${formatDuration(finish.elapsed)}`}`}
+              {finish.apps > 0
+                ? ` · ${String(finish.apps)} ${finish.apps === 1 ? "App" : "Apps"}`
+                : ""}
+              {finish.cost === null
+                ? ""
+                : ` · ${formatMoney(finish.cost / 100_000)}`}
+            </span>
+          </p>
+        ) : null}
+      </div>
     </section>
   );
 }

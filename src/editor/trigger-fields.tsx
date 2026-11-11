@@ -113,7 +113,7 @@ export function TriggerFields({
   return (
     <FieldSet
       legend="Triggers"
-      description="Publish changes, then arm them in Triggers."
+      description="Publish your changes, then switch the triggers on in Triggers."
     >
       {projection === null ? (
         <p role="alert">
@@ -356,7 +356,7 @@ export function TriggerFields({
       </div>
       {!events.length ? (
         <p className="wf-muted">
-          No App events are declared in the current catalog.
+          None of your installed Apps offers an event to start from yet.
         </p>
       ) : null}
     </FieldSet>

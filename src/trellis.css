@@ -63,6 +63,16 @@ body,
   max-width: 42rem;
   margin-inline: auto;
 }
+/* The plain invitation has no frame; centre it under the page title. */
+.wf-invitation {
+  text-align: center;
+  padding-block: var(--spacing-xl);
+}
+.wf-invitation > * {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-xs);
+}
 .wf-page h1,
 .wf-run-list h1 {
   font-size: var(--text-lg);
@@ -103,7 +113,7 @@ body,
   gap: var(--spacing-sm);
   overflow: hidden;
 }
-/* The timeline scrolls above the docked review, which stays where the eye is. */
+/* The docked review sits above the timeline, so the question is the first thing seen. */
 .wf-run-timeline {
   flex: 1;
   min-height: 0;
@@ -145,14 +155,23 @@ body,
   flex: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: var(--spacing-xl);
-  padding-block: var(--spacing-lg);
-  border-top: 1px solid
+  padding-block: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid
     color-mix(in oklab, var(--color-base-content) 12%, transparent);
 }
 .wf-dock:not(:has(.wf-dock-media)) {
   grid-template-columns: minmax(0, 1fr);
+}
+/* The result being judged, set as plain readable words (not a code dump). */
+.wf-dock-media .wf-output-preview pre {
+  margin: 0;
+  padding: var(--spacing-lg);
+  font-family: inherit;
+  font-size: var(--text-xl);
+  border-radius: var(--radius-box);
+  background: var(--color-base-200);
 }
 .wf-dock-body {
   display: grid;
@@ -270,4 +289,13 @@ body,
   max-width: 100%;
   max-height: 10rem;
   object-fit: contain;
+}
+
+.wf-step-output .wf-output-preview pre {
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+.wf-invitation .empty-state-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
 }

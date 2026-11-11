@@ -3,7 +3,7 @@
   "definition": {
     "format": "fungi.workflow/v1",
     "title": "Build on merge",
-    "description": "An accepted main push for a registered App starts this Workflow through the Workflows capability. Build the exact accepted commit, verify its completed build and Release provenance, then install with Workflow-owned authority. Every step records its result. A failed build or verification never installs; new permissions preserve the running Release and require owner consent.",
+    "description": "When a change to one of your Apps is accepted into main, this workflow builds that exact version, checks the build finished properly and came from that change, then installs it. Every step records its result. If the build or the check fails, nothing is installed. If the new version asks for more permissions, the version already running stays in place until the owner agrees.",
     "apps": {
       "bonsai": {
         "appId": "app_bonsai"

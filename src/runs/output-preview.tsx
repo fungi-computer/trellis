@@ -2,6 +2,7 @@ import * as z from "zod";
 import { useEffect, useState } from "react";
 import type { Json } from "@fungi.computer/braid";
 import type { RunStep } from "./run-state.js";
+import { chosenWords } from "./choice-words.js";
 import { versionRelativeTime } from "../history/relative-time.js";
 
 export type ReadMedia = (path: string, signal: AbortSignal) => Promise<Blob>;
@@ -119,8 +120,14 @@ export function StepOutput({
   step,
   formats,
   readMedia,
+  choiceLabel,
+  titled = false,
 }: {
+  /** True when the row above already says the decision, so the body does not repeat it. */
+  titled?: boolean;
   step: RunStep;
+  /** The label of the choice made, when the review named one. */
+  choiceLabel?: string | undefined;
   formats?: Readonly<Record<string, string | undefined>>;
   readMedia?: ReadMedia | undefined;
 }) {
@@ -128,22 +135,22 @@ export function StepOutput({
   const recordedAt =
     review && "recordedAt" in review ? review.recordedAt : undefined;
   const decision =
-    review?.choice === "approved"
-      ? "Approved"
-      : review?.choice === "rejected"
-        ? "Rejected"
-        : review?.choice;
+    review === undefined
+      ? undefined
+      : chosenWords(review.choice, choiceLabel ?? review.choice);
   return (
     <div className="wf-step-output">
       {review ? (
         <div>
-          <strong>
-            {decision}
-            {review.note ? `: ${review.note}` : ""}
-          </strong>
+          {titled ? null : (
+            <strong>
+              {decision}
+              {review.note ? `: ${review.note}` : ""}
+            </strong>
+          )}
           {recordedAt !== undefined ? (
             <>
-              {" · "}
+              {titled ? null : " · "}
               <time dateTime={new Date(recordedAt).toISOString()}>
                 {versionRelativeTime(new Date(recordedAt).toISOString())}
               </time>

@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.10.10
+
+### Patch Changes
+
+- Changes since 0.10.9:
+
+  - fix(trellis): polish welcome title and art, show Kept once, plain output
+    copy
+  - fix(trellis): lead first run with the finishing example and plain copy
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.6
+
 ## 0.10.9
 
 ### Patch Changes

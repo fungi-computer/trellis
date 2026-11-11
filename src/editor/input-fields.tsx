@@ -367,7 +367,7 @@ function InputField({
                 <Field
                   label="Choices"
                   error={enumError ?? undefined}
-                  description="One per line. Leave empty to allow any value."
+                  description="One per line. Leave empty to allow anything."
                 >
                   <Textarea
                     aria-label={`${label} choices`}
@@ -494,8 +494,8 @@ export function MappedOutputs({
               {titles.get(ref.node) ??
                 (ref.node === "$input"
                   ? "Workflow input"
-                  : `Missing node ${ref.node}`)}{" "}
-              ({ref.port})
+                  : `Missing node ${ref.node}`)}
+              {ref.node === "$input" ? ` (${names(ref.port)})` : ""}
             </span>
           </DataRow>
         ))}

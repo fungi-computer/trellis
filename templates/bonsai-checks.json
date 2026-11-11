@@ -3,7 +3,7 @@
   "definition": {
     "format": "fungi.workflow/v1",
     "title": "Bonsai checks",
-    "description": "Clone the Change’s exact head on your Computer with a read-only Git pass for the Change’s repository, run npm test, and report tests passed or failed on the Change. Edit the trigger’s test command for your repository.",
+    "description": "Copy the latest version of a proposed change to your Computer (read-only), run npm test on it, and report on the change whether the tests passed or failed. Edit the trigger’s test command for your repository.",
     "apps": {
       "bonsai": {
         "appId": "app_bonsai"

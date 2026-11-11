@@ -160,7 +160,7 @@ export function portPresentation(key: string, schema: PortSchema) {
       ? (types.get(schema.type) ?? schema.type)
       : key === "after"
         ? "signal"
-        : "any value");
+        : "anything");
   return {
     label: labels.get(key) ?? humanTitle(key),
     type,

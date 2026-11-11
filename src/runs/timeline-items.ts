@@ -1,3 +1,4 @@
+import { chosenWords } from "./choice-words.js";
 import {
   fillReviewText,
   type LoopPosition,
@@ -31,6 +32,8 @@ export type TimelineItem = Readonly<{
     appId: string;
     params: readonly Readonly<{ key: string; value: string }>[];
   }>;
+  /** The label of the choice made, for a review the person has answered. */
+  chose?: string;
   /** The recorded step, for the raw ▸ view. */
   step: RunStep;
 }>;
@@ -93,7 +96,11 @@ function decision(node: Extract<Node, { kind: "review" }>, step: RunStep) {
     choice?.description === undefined
       ? undefined
       : fillReviewText(choice.description, stepPosition(step));
-  return { title: `You chose ${label}`, detail: detailLine(consequence, note) };
+  return {
+    title: chosenWords(output.choice, label),
+    detail: detailLine(consequence, note),
+    chose: label,
+  };
 }
 
 /**
