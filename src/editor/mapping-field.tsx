@@ -169,7 +169,7 @@ export function MappingField({
           return schema.items?.type === "object" ? (
             <div key={index}>{field}</div>
           ) : (
-            <Card key={index} density="compact">
+            <Card key={index} variant="outline" density="compact">
               <CardContent>{field}</CardContent>
             </Card>
           );
@@ -249,7 +249,7 @@ export function MappingField({
   }
   if (schema.type === "object")
     return (
-      <Card density="compact" role="group" aria-label={name}>
+      <Card variant="outline" density="compact" role="group" aria-label={name}>
         <CardHeader className="flex flex-row items-center justify-between gap-sm">
           <Label>{name}</Label>
           <div className="flex items-center gap-sm">

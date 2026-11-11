@@ -241,7 +241,7 @@ function InputField({
     );
   }, [name, value]);
   return (
-    <Card className="@container">
+    <Card variant="outline" className="@container">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between">
         <div className="min-w-0 flex-1 basis-full @sm:basis-40">
           <CardTitle>{label}</CardTitle>
@@ -351,17 +351,14 @@ function InputField({
                   ))}
                 </Select>
               </Field>
-              <Field>
-                <label className="flex items-center gap-xs">
-                  <Checkbox
-                    aria-label={`${label} required`}
-                    checked={required}
-                    onChange={(event) => {
-                      onRequired(event.currentTarget.checked);
-                    }}
-                  />
-                  Required
-                </label>
+              <Field label="Required" orientation="inline">
+                <Checkbox
+                  aria-label={`${label} required`}
+                  checked={required}
+                  onChange={(event) => {
+                    onRequired(event.currentTarget.checked);
+                  }}
+                />
               </Field>
               {type === "string" || type === "number" || type === "integer" ? (
                 <Field
@@ -501,7 +498,7 @@ export function MappedOutputs({
         ))}
       </DataList>
       {Object.keys(value).length ? null : (
-        <p>
+        <p className="caps-fieldset-description">
           Connect a step's output to the workflow output on the canvas to return
           a result.
         </p>

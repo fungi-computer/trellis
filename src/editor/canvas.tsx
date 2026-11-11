@@ -350,8 +350,7 @@ export function WorkflowCanvas({
     pathOptions: { offset: 8 },
   }));
   return (
-    <Surface
-      depth="deep"
+    <div
       className="wf-canvas"
       onDragOver={(event) => {
         event.preventDefault();
@@ -445,6 +444,6 @@ export function WorkflowCanvas({
           orientation="horizontal"
         />
       </ReactFlow>
-    </Surface>
+    </div>
   );
 }

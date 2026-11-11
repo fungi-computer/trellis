@@ -1,5 +1,17 @@
 # @fungi.computer/trellis
 
+## 0.10.11
+
+### Patch Changes
+
+- Changes since 0.10.10:
+
+  - fix(trellis): flatten the Inspector item cards into hairline-separated rows
+  - fix(trellis): tighten alignment and drop the canvas double frame
+
+- Updated dependencies
+  - @fungi.computer/caps@0.10.7
+
 ## 0.10.10
 
 ### Patch Changes

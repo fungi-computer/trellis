@@ -55,8 +55,12 @@ body,
   margin: 0;
 }
 .wf-page {
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xs);
   overflow: auto;
+}
+/* The first tab's label lines up with the window title above it. */
+.wf-sections [role="tab"]:first-child {
+  margin-inline-start: calc(var(--spacing-xs) - var(--spacing-md));
 }
 .wf-invitation {
   width: 100%;
@@ -142,7 +146,7 @@ body,
 }
 .wf-finish {
   font-size: var(--text-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-sm) 0;
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -238,7 +242,6 @@ body,
     flex-direction: column;
     overflow: auto;
     flex: 1;
-    padding-inline: var(--spacing-lg);
   }
   .wf-run-list {
     flex: none;

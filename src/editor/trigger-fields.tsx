@@ -121,7 +121,7 @@ export function TriggerFields({
         </p>
       ) : null}
       {triggers.map((trigger) => (
-        <Card key={trigger.id} density="compact">
+        <Card key={trigger.id} variant="outline" density="compact">
           <CardHeader>
             <div className="flex items-baseline justify-between gap-xs">
               <CardTitle className="min-w-0 flex-1">
@@ -131,7 +131,7 @@ export function TriggerFields({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="xs"
+                  size="sm"
                   aria-label={`${expanded === trigger.id ? "Close" : "Edit"} ${trigger.title ?? trigger.id}`}
                   aria-expanded={expanded === trigger.id}
                   aria-controls={`trigger-settings-${trigger.id}`}
@@ -144,7 +144,7 @@ export function TriggerFields({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="xs"
+                  size="sm"
                   aria-label={`Remove trigger ${trigger.title ?? trigger.id}`}
                   onClick={() => {
                     onChange({
