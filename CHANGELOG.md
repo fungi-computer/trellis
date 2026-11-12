@@ -1,5 +1,21 @@
 # @fungi.computer/trellis
 
+## 0.11.4
+
+### Patch Changes
+
+- Changes since 0.11.3:
+
+  - fix(darkroom): regenerate API docs and the Prints catalog pin for reference
+    fields
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.10.1
+  - @fungi.computer/shiitake-extensions@0.6.14
+  - @fungi.computer/braid@0.4.10
+  - @fungi.computer/workflows-wire@0.4.10
+
 ## 0.11.3
 
 ### Patch Changes
