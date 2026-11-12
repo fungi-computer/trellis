@@ -124,12 +124,6 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   };
   // Navigation describes the selected Item, not whether its content has loaded.
   const navigation: ChromeParts = {
-    back: {
-      can: readOnly && !state.restoring,
-      go: () => {
-        chooseVersion("draft");
-      },
-    },
     crumbs: [
       {
         id: "version",

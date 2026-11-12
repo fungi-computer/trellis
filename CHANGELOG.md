@@ -1,5 +1,24 @@
 # @fungi.computer/trellis
 
+## 0.11.0
+
+### Minor Changes
+
+- Changes since 0.10.13:
+
+  - feat(trellis): make title-bar Back and Forward walk the places visited
+  - feat(window): add in-App Forward to the window contract and title bar
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.10.0
+  - @fungi.computer/caps@0.11.0
+  - @fungi.computer/braid@0.4.9
+  - @fungi.computer/workflows-wire@0.4.9
+  - @fungi.computer/shiitake-extensions@0.6.13
+
 ## 0.10.13
 
 ### Patch Changes

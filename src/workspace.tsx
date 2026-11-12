@@ -1,5 +1,9 @@
-import type { AppRoot, HostUi } from "@fungi.computer/agar";
-import { useWindowStatus } from "@fungi.computer/agar/react";
+import {
+  createAppHistory,
+  type AppRoot,
+  type HostUi,
+} from "@fungi.computer/agar";
+import { useStore, useWindowStatus } from "@fungi.computer/agar/react";
 import * as z from "zod";
 import { PortableShare, type ShareDialog } from "./sharing/portable-share.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -44,6 +48,12 @@ type Tool = keyof typeof toolLabels;
 export type WorkflowScope =
   | { kind: "all-runs" | "templates" | "all-workflows" | "schedules" }
   | { kind: "workflow"; workflowId: string };
+/** One place in Trellis: what Back and Forward move between. */
+type Place = Readonly<{
+  scope: WorkflowScope;
+  tool: Tool;
+  selectedRun: string | null;
+}>;
 
 export function WorkflowWorkspace({
   client,
@@ -69,9 +79,27 @@ export function WorkflowWorkspace({
   const [library, setLibrary] = useState<Awaited<
     ReturnType<WorkflowClient["listWorkflows"]>
   > | null>(null);
-  const [scope, setScope] = useState<WorkflowScope>(initialScope);
+  // Back and Forward walk the places the person actually visited, in order.
+  const [history] = useState(() =>
+    createAppHistory<Place>({
+      scope: initialScope,
+      tool: "editor",
+      selectedRun: null,
+    }),
+  );
+  const {
+    current: { scope, tool, selectedRun },
+    canGoBack,
+    canGoForward,
+  } = useStore(history) ?? history.get();
+  /** Go somewhere new: a step Back can return from. */
+  const go = useCallback(
+    (next: Partial<Place>) => {
+      history.push({ ...history.get().current, ...next });
+    },
+    [history],
+  );
   const viewingSchedules = scope.kind === "schedules";
-  const [tool, setTool] = useState<Tool>("editor");
   // Window-local picker recency only. Back never reads this list.
   const [recent, setRecent] = useState<readonly string[]>(() =>
     initialScope.kind === "workflow" ? [initialScope.workflowId] : [],
@@ -79,7 +107,6 @@ export function WorkflowWorkspace({
   const workflowId = scope.kind === "workflow" ? scope.workflowId : null;
   // Keep the draft's autosave lifetime when navigating to another scope.
   const [editorWorkflowId, setEditorWorkflowId] = useState(workflowId);
-  const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
   const [error, setError] = useState<Error | null>(null);
   // Git access is asked for in use, never at install: until the owner
@@ -92,16 +119,23 @@ export function WorkflowWorkspace({
     client: WorkflowClient;
     requestId: string;
   } | null>(null);
-  const choose = useCallback((id: string) => {
-    setScope({ kind: "workflow", workflowId: id });
-    setEditorWorkflowId(id);
-    setTool("editor");
-    setSelectedRun(null);
-    setRecent((current) =>
-      [id, ...current.filter((item) => item !== id)].slice(0, 12),
-    );
-    setAttempt((value) => value + 1);
-  }, []);
+  const choose = useCallback(
+    (id: string) => {
+      history.push({
+        scope: { kind: "workflow", workflowId: id },
+        tool: "editor",
+        selectedRun: null,
+      });
+      setRecent((current) =>
+        [id, ...current.filter((item) => item !== id)].slice(0, 12),
+      );
+      setAttempt((value) => value + 1);
+    },
+    [history],
+  );
+  // The editor follows the workflow being viewed, and outlives a visit elsewhere.
+  if (workflowId !== null && workflowId !== editorWorkflowId)
+    setEditorWorkflowId(workflowId);
   useEffect(() => {
     if (openRequest?.kind !== "navigate") return;
     if (
@@ -112,8 +146,7 @@ export function WorkflowWorkspace({
     const run = openRequest.params.find((param) => param.key === "run")?.value;
     if (run !== undefined && run !== "") {
       handledRequest.current = { client, requestId: openRequest.requestId };
-      setScope({ kind: "all-runs" });
-      setSelectedRun(run);
+      go({ scope: { kind: "all-runs" }, selectedRun: run });
       return;
     }
     const target = workflowIdSchema.safeParse(
@@ -122,7 +155,7 @@ export function WorkflowWorkspace({
     if (!target.success) return;
     handledRequest.current = { client, requestId: openRequest.requestId };
     choose(target.data);
-  }, [client, openRequest, choose]);
+  }, [client, openRequest, choose, go]);
   useEffect(() => {
     if (viewingSchedules) return;
     let active = true;
@@ -231,8 +264,7 @@ export function WorkflowWorkspace({
   );
   const title = workflows.find((item) => item.workflowId === workflowId)?.title;
   const home = () => {
-    setScope({ kind: "all-runs" });
-    setSelectedRun(null);
+    go({ scope: { kind: "all-runs" }, tool: "editor", selectedRun: null });
   };
   // A Team with no workflows opens on what Trellis is for, not an empty run list.
   const showWelcome =
@@ -285,8 +317,7 @@ export function WorkflowWorkspace({
         id === "all-workflows" ||
         id === "schedules"
       ) {
-        setScope({ kind: id });
-        setSelectedRun(null);
+        go({ scope: { kind: id }, selectedRun: null });
         return;
       }
       const item = workflows.find((item) => `w${item.workflowId}` === id);
@@ -309,8 +340,7 @@ export function WorkflowWorkspace({
             })),
             select: (id?: string) => {
               if (id !== "editor" && id !== "runs" && id !== "triggers") return;
-              setTool(id);
-              setSelectedRun(null);
+              go({ tool: id, selectedRun: null });
             },
           },
         ]
@@ -355,14 +385,11 @@ export function WorkflowWorkspace({
       },
       ...share,
     ],
-    back: {
-      can: scope.kind !== "all-runs" || selectedRun !== null,
-      go: () => {
-        if (selectedRun !== null) setSelectedRun(null);
-        else if (scope.kind === "workflow" && tool !== "editor")
-          setTool("editor");
-        else home();
-      },
+    history: {
+      canGoBack,
+      canGoForward,
+      back: () => history.back(),
+      forward: () => history.forward(),
     },
   });
   return (
@@ -479,8 +506,7 @@ export function WorkflowWorkspace({
                 version={version}
                 autoRun={autoRun}
                 onRun={(id) => {
-                  setSelectedRun(id);
-                  setTool("runs");
+                  go({ tool: "runs", selectedRun: id });
                 }}
               />
             )}
@@ -517,17 +543,29 @@ export function WorkflowWorkspace({
           workflowId={workflowId ?? undefined}
           selectedRun={selectedRun}
           onSelect={(id, owner) => {
-            choose(owner);
-            setTool("runs");
-            setSelectedRun(id);
+            const place: Place = {
+              scope: { kind: "workflow", workflowId: owner },
+              tool: "runs",
+              selectedRun: id,
+            };
+            const current = history.get().current;
+            // Opening the run a deep link already selected only names its
+            // workflow; it is not a new place to go back from.
+            if (current.scope.kind === "all-runs" && current.selectedRun === id)
+              history.replace(place);
+            else history.push(place);
+            setRecent((items) =>
+              [owner, ...items.filter((item) => item !== owner)].slice(0, 12),
+            );
+            setAttempt((value) => value + 1);
           }}
           readMedia={readMedia}
           openIn={openIn}
           onOpenWorkflows={() => {
-            setScope({ kind: "all-workflows" });
+            go({ scope: { kind: "all-workflows" } });
           }}
           onOpenEditor={() => {
-            setTool("editor");
+            go({ tool: "editor" });
           }}
         />
       ) : null}
@@ -536,7 +574,7 @@ export function WorkflowWorkspace({
           client={client}
           workflowId={workflowId}
           onOpenEditor={() => {
-            setTool("editor");
+            go({ tool: "editor" });
           }}
         />
       ) : null}
@@ -555,7 +593,7 @@ export function WorkflowWorkspace({
         <Schedules
           client={client}
           onOpenWorkflows={() => {
-            setScope({ kind: "all-workflows" });
+            go({ scope: { kind: "all-workflows" } });
           }}
         />
       ) : null}

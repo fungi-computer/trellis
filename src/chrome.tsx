@@ -20,8 +20,13 @@ export type ChromeCrumb = AppCrumb & {
 };
 /** A header command with what it does. */
 export type ChromeCommand = AppHeaderCommand & { run: () => void };
-/** Where Back goes, when it can go anywhere. */
-export type ChromeBack = Readonly<{ can: boolean; go: () => void }>;
+/** The App's history: Back and Forward move between places already visited. */
+export type ChromeHistory = Readonly<{
+  canGoBack: boolean;
+  canGoForward: boolean;
+  back: () => boolean;
+  forward: () => boolean;
+}>;
 
 /** What one part of Trellis adds to the window header the host draws. */
 export type ChromeParts = Readonly<{
@@ -29,7 +34,7 @@ export type ChromeParts = Readonly<{
   primary?: readonly ChromeCommand[];
   menu?: readonly ChromeCommand[];
   status?: readonly AppHeaderStatus[];
-  back?: ChromeBack;
+  history?: ChromeHistory;
 }>;
 
 type Register = (key: string, parts: ChromeParts | null) => void;
@@ -84,14 +89,12 @@ export function ChromeProvider({
   const crumbs = all.flatMap((part) => part.crumbs ?? []);
   const primary = all.flatMap((part) => part.primary ?? []);
   const menu = all.flatMap((part) => part.menu ?? []);
-  const back = [...all].reverse().find((part) => part.back?.can === true)?.back;
+  const history = all.find((part) => part.history !== undefined)?.history;
   const published = {
-    canGoBack: back?.can === true,
-    onBack: () => {
-      if (back?.can !== true) return false;
-      back.go();
-      return true;
-    },
+    canGoBack: history?.canGoBack === true,
+    canGoForward: history?.canGoForward === true,
+    onForward: () => history?.forward() ?? false,
+    onBack: () => history?.back() ?? false,
     onCrumb: (crumbId: string, siblingId?: string) => {
       crumbs.find((crumb) => crumb.id === crumbId)?.select?.(siblingId);
     },
