@@ -1,5 +1,26 @@
 # @fungi.computer/trellis
 
+## 0.12.0
+
+### Minor Changes
+
+- Changes since 0.11.6:
+
+  - feat(darkroom): price Seedance 2.5 at the dashboard rates
+  - feat(prints): add Seedance 2.5 to the Darkroom video catalog
+  - fix(hub): keep App Computer mkdir beside move after merging integration
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.12.1
+  - @fungi.computer/puffball@0.7.0
+  - @fungi.computer/shiitake-extensions@0.8.0
+  - @fungi.computer/braid@0.4.13
+  - @fungi.computer/workflows-wire@0.4.13
+
 ## 0.11.6
 
 ### Patch Changes
