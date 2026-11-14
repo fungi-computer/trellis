@@ -1,5 +1,22 @@
 # @fungi.computer/trellis
 
+## 0.12.2
+
+### Patch Changes
+
+- Changes since 0.12.1:
+
+  - fix(darkroom): keep audio fields off image settings and repin Trellis to the
+    Prints catalog
+  - fix(darkroom): repin the Prints catalog and templates, guard optional image
+    sizes
+
+- Updated dependencies
+  - @fungi.computer/agar@0.14.0
+  - @fungi.computer/braid@0.4.15
+  - @fungi.computer/workflows-wire@0.4.15
+  - @fungi.computer/shiitake-extensions@0.9.1
+
 ## 0.12.1
 
 ### Patch Changes

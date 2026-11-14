@@ -441,7 +441,7 @@
             "kind": "app",
             "app": "prints",
             "method": "generateVideo",
-            "methodDigest": "sha256:1c3cca84c913e0860e7d1a349982e03817f7000bd883e31feb0e038cf1f07f8f",
+            "methodDigest": "sha256:d640e0c5aa888c86006a03684c42d814452c0ebccef2246cf4e2c9435ef66ca1",
             "values": {
               "settings": {
                 "object": {
