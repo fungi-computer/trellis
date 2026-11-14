@@ -186,7 +186,7 @@
         "kind": "app",
         "app": "shed",
         "method": "runCommand",
-        "methodDigest": "sha256:7f5d5f84e8d75d0ff2aa36380ef218c12e20db0e9d07316e138c8fb71cb4a58b",
+        "methodDigest": "sha256:45f7cec235f99fc844918c1510e73851492c3513323d59cfa5a9d396f6117d68",
         "values": {
           "command": {
             "from": {

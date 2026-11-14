@@ -864,7 +864,7 @@
             "kind": "app",
             "app": "prints",
             "method": "generateVideo",
-            "methodDigest": "sha256:a82e209849afafb25d4a5512cb6e1a7159d4681ed561ccb7f1db4a2f44ff0129",
+            "methodDigest": "sha256:1c3cca84c913e0860e7d1a349982e03817f7000bd883e31feb0e038cf1f07f8f",
             "values": {
               "settings": {
                 "object": {
@@ -1144,7 +1144,7 @@
             "kind": "app",
             "app": "prints",
             "method": "generateImage",
-            "methodDigest": "sha256:340227906acd4ef6f3c9d80ee660364f5edc703c1413c602e0f5d4f945c27184",
+            "methodDigest": "sha256:522086f6a6392ae34e605390347b39d1d26bfe5b02726285ef396dd67fb0f800",
             "values": {
               "settings": {
                 "object": {
