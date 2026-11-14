@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.14.0
+
+### Minor Changes
+
+- Changes since 0.13.0:
+
+  - fix(oyster): drop a carried App approval when its host descriptor changes
+  - feat(trellis): add pnpm repin:templates to regenerate template pins
+
+### Patch Changes
+
+- @fungi.computer/shiitake-extensions@0.9.3
+
 ## 0.13.0
 
 ### Minor Changes
