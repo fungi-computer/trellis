@@ -1,5 +1,23 @@
 # @fungi.computer/trellis
 
+## 0.13.0
+
+### Minor Changes
+
+- Changes since 0.12.2:
+
+  - feat(prints): audio in the composer, wall, viewer and info drawer
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.15.0
+  - @fungi.computer/caps@0.11.5
+  - @fungi.computer/braid@0.4.16
+  - @fungi.computer/workflows-wire@0.4.16
+  - @fungi.computer/shiitake-extensions@0.9.2
+
 ## 0.12.2
 
 ### Patch Changes
