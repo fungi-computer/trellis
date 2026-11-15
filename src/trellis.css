@@ -1,6 +1,6 @@
 @import "@fungi.computer/caps/tailwind.css";
-@source "./";
 @import "./xyflow.css";
+@source "./";
 
 /* Product layout only; Caps components keep their own finish (Prints' frame). */
 html,

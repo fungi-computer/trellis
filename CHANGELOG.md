@@ -1,5 +1,16 @@
 # @fungi.computer/trellis
 
+## 0.15.3
+
+### Patch Changes
+
+- Changes since 0.15.2:
+
+  - fix(trellis): put the stylesheet import before the source directive
+
+- Updated dependencies
+  - @fungi.computer/shiitake-extensions@0.11.0
+
 ## 0.15.2
 
 ### Patch Changes
