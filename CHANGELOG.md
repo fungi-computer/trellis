@@ -1,5 +1,21 @@
 # @fungi.computer/trellis
 
+## 0.15.2
+
+### Patch Changes
+
+- Changes since 0.15.1:
+
+  - fix(darkroom): make erasure durable, scoped and safe for reused destination
+    paths
+  - fix(darkroom): regenerate agar docs and template pins for guidance
+
+- Updated dependencies
+  - @fungi.computer/agar@0.18.0
+  - @fungi.computer/braid@0.4.19
+  - @fungi.computer/workflows-wire@0.4.19
+  - @fungi.computer/shiitake-extensions@0.10.2
+
 ## 0.15.1
 
 ### Patch Changes
