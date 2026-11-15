@@ -1144,7 +1144,7 @@
             "kind": "app",
             "app": "prints",
             "method": "generateImage",
-            "methodDigest": "sha256:522086f6a6392ae34e605390347b39d1d26bfe5b02726285ef396dd67fb0f800",
+            "methodDigest": "sha256:61a0c69a728ed631ccefb1837b684492f1aeaa4cad6623bf607904eb6541c375",
             "values": {
               "settings": {
                 "object": {

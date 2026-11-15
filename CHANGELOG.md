@@ -1,5 +1,22 @@
 # @fungi.computer/trellis
 
+## 0.15.0
+
+### Minor Changes
+
+- Changes since 0.14.3:
+
+  - fix(prints): keep source-image operations out of the generator picker
+  - feat(darkroom): expose each model's billing unit in the public model list
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/agar@0.17.0
+  - @fungi.computer/braid@0.4.18
+  - @fungi.computer/workflows-wire@0.4.18
+  - @fungi.computer/shiitake-extensions@0.10.1
+
 ## 0.14.3
 
 ### Patch Changes
