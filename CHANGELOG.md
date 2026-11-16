@@ -1,5 +1,19 @@
 # @fungi.computer/trellis
 
+## 0.15.4
+
+### Patch Changes
+
+- Changes since 0.15.3:
+
+  - fix(trellis): repin the Prints method digests for the provider reason field
+
+- Updated dependencies
+  - @fungi.computer/agar@0.18.1
+  - @fungi.computer/braid@0.4.20
+  - @fungi.computer/workflows-wire@0.4.20
+  - @fungi.computer/shiitake-extensions@0.11.1
+
 ## 0.15.3
 
 ### Patch Changes
