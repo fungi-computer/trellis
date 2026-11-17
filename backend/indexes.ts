@@ -235,12 +235,9 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
         const { workflowId, version: number, commit } = value;
         const saved: Pick<
           typeof value,
-          "definition" | "layout" | "commit" | "provenance"
-        > = {
-          definition: value.definition,
-          layout: value.layout,
-          commit,
-        };
+          "definition" | "layout" | "frames" | "commit" | "provenance"
+        > = { definition: value.definition, layout: value.layout, commit };
+        if (value.frames !== undefined) saved.frames = value.frames;
         if (value.provenance !== undefined) saved.provenance = value.provenance;
         publications.write(`${workflowId}:v${String(number)}`, commit, value);
         publications.write(`${workflowId}:${commit}`, commit, value);
@@ -285,8 +282,9 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
         const { workflowId, version: number, commit } = value;
         const saved: Pick<
           typeof value,
-          "definition" | "layout" | "commit" | "provenance"
+          "definition" | "layout" | "frames" | "commit" | "provenance"
         > = { definition: value.definition, layout: value.layout, commit };
+        if (value.frames !== undefined) saved.frames = value.frames;
         if (value.provenance !== undefined) saved.provenance = value.provenance;
         publications.write(`${workflowId}:v${String(number)}`, commit, value);
         publications.write(`${workflowId}:${commit}`, commit, value);

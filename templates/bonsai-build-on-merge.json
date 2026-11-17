@@ -36,6 +36,7 @@
       {
         "id": "build",
         "kind": "app",
+        "title": "Build the App",
         "app": "bonsai",
         "method": "apps.build",
         "methodDigest": "sha256:9be16b868eec164c504a30d37dd3739461fc33bf721699e49566ac2126f0a7fb",
@@ -63,6 +64,7 @@
       {
         "id": "verify",
         "kind": "app",
+        "title": "Verify the build",
         "app": "bonsai",
         "method": "apps.verifyBuild",
         "methodDigest": "sha256:0ca6e1984a98c75ff18788dc1997c00496ae84a3723b74004ac325a095f72fb5",
@@ -84,6 +86,7 @@
       {
         "id": "install",
         "kind": "app",
+        "title": "Install the App",
         "app": "bonsai",
         "method": "apps.install",
         "methodDigest": "sha256:3dcf4113653bf8427bbeb4351fc79649108d4624e3c5aa8a5148d0d323501fc6",

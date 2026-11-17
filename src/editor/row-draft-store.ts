@@ -96,17 +96,22 @@ export function rowDraftStore(
   function copiedDraft(source: {
     definition: unknown;
     layout: Draft["layout"];
+    frames?: Draft["frames"];
     provenance?: Draft["provenance"];
   }): Draft {
-    const draft: Draft = {
+    const content = {
       definition: S.decodeUnknownSync(workflowDefinitionSchema)(
         source.definition,
       ),
       layout: source.layout,
     };
-    if (source.provenance !== undefined)
-      return { ...draft, provenance: source.provenance };
-    return draft;
+    const framed =
+      source.frames === undefined
+        ? content
+        : { ...content, frames: source.frames };
+    return source.provenance === undefined
+      ? framed
+      : { ...framed, provenance: source.provenance };
   }
   return {
     async readCatalog(appIds = []) {

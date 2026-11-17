@@ -135,39 +135,6 @@ export const redesignAppDisplay = {
   Grove: { displayName: "Grove", icon: "chat" },
 } as const;
 
-/**
- * The plain step names of SPEC §5.3, by workflow then node id. The braid node
- * has no title or note yet.
- * TODO(B1, local_store_agactmfdhwfg3uwuttbut): move these into node title in
- * the B1 PR and delete this map.
- */
-export const stepNames = {
-  checkEachChange: {
-    read: "Read the change",
-    mark: "Mark as running",
-    tests: "Run npm test",
-    summarise: "Summarise result",
-    report: "Report result",
-    testsFailed: "Tests failed?",
-    tell: "Tell #field-notes",
-  },
-  weeklyCover: {
-    prompt: "Cover prompt",
-    cover: "Make the cover",
-    approve: "Use this cover?",
-    save: "Save the cover",
-  },
-  storyboard: {
-    forEachBeat: "For each beat",
-    contactSheet: "Contact sheet",
-    repeatPanel: "Repeat up to 3 times",
-    prepare: "Prepare generation",
-    panel: "Make a panel",
-    keep: "Keep this panel?",
-    decision: "Review decision",
-  },
-} as const;
-
 const from = (node: string, port: string) => ({ from: { node, port } });
 const wire = (a: string, ap: string, b: string, bp: string) => ({
   from: { node: a, port: ap },
@@ -200,6 +167,7 @@ const checkEachChangeDefinition: WorkflowDefinition = {
     {
       id: "read",
       kind: "code",
+      title: "Read the change",
       source:
         "const { change } = await env.INPUT.read({});\nreturn { repository: change.repository, revision: change.revision, number: change.number };",
       input: object({ change }),
@@ -209,6 +177,7 @@ const checkEachChangeDefinition: WorkflowDefinition = {
     {
       id: "mark",
       kind: "app",
+      title: "Mark as running",
       app: "bonsai",
       method: "checks.report",
       methodDigest: "fixture-bonsai-checks-report",
@@ -217,6 +186,7 @@ const checkEachChangeDefinition: WorkflowDefinition = {
     {
       id: "tests",
       kind: "app",
+      title: "Run npm test",
       app: "shed",
       method: "runCommand",
       methodDigest: "fixture-shed-run-command",
@@ -228,6 +198,7 @@ const checkEachChangeDefinition: WorkflowDefinition = {
     {
       id: "summarise",
       kind: "code",
+      title: "Summarise result",
       source:
         'const { exitCode, output } = await env.INPUT.read({});\nreturn { state: exitCode === 0 ? "passed" : "failed", summary: output.slice(-400) };',
       input: object({ exitCode: whole, output: text }),
@@ -237,6 +208,7 @@ const checkEachChangeDefinition: WorkflowDefinition = {
     {
       id: "report",
       kind: "app",
+      title: "Report result",
       app: "bonsai",
       method: "checks.report",
       methodDigest: "fixture-bonsai-checks-report",
@@ -396,6 +368,7 @@ const weeklyCoverDefinition: WorkflowDefinition = {
     {
       id: "prompt",
       kind: "transform",
+      title: "Cover prompt",
       fields: {
         prompt: {
           literal:
@@ -406,6 +379,7 @@ const weeklyCoverDefinition: WorkflowDefinition = {
     {
       id: "cover",
       kind: "app",
+      title: "Make the cover",
       app: "prints",
       method: "generateImage",
       methodDigest: "fixture-prints-generate-image",
@@ -443,6 +417,7 @@ const weeklyCoverDefinition: WorkflowDefinition = {
     {
       id: "save",
       kind: "app",
+      title: "Save the cover",
       app: "inkcap",
       method: "writeFile",
       methodDigest: "fixture-inkcap-write-file",
@@ -487,6 +462,7 @@ const mossDefinition: WorkflowDefinition = {
     {
       id: "testsFailed",
       kind: "condition",
+      title: "Tests failed?",
       test: {
         op: "eq",
         left: from("summarise", "state"),
@@ -496,6 +472,7 @@ const mossDefinition: WorkflowDefinition = {
     {
       id: "tell",
       kind: "app",
+      title: "Tell #field-notes",
       app: "grove",
       method: "sendMessage",
       methodDigest: "fixture-grove-send-message",
@@ -548,6 +525,7 @@ const storyboardDefinition: WorkflowDefinition = {
     {
       id: "beatItems",
       kind: "transform",
+      title: "Beat items",
       fields: {
         items: {
           each: {
@@ -566,6 +544,7 @@ const storyboardDefinition: WorkflowDefinition = {
     {
       id: "forEachBeat",
       kind: "map",
+      title: "For each beat",
       over: { node: "beatItems", port: "items" },
       body: "beat",
       concurrency: 1,
@@ -574,6 +553,7 @@ const storyboardDefinition: WorkflowDefinition = {
     {
       id: "contactSheet",
       kind: "code",
+      title: "Contact sheet",
       source:
         'const { shots } = await env.INPUT.read({});\nreturn { sheet: shots.map((shot) => shot.choice).join("\\n") };',
       input: object({ shots: { type: "array" } }),
@@ -590,6 +570,7 @@ const storyboardDefinition: WorkflowDefinition = {
         {
           id: "repeatPanel",
           kind: "repeat",
+          title: "Repeat up to 3 times",
           body: "attempt",
           maxRounds: 3,
           until: {
@@ -612,6 +593,7 @@ const storyboardDefinition: WorkflowDefinition = {
         {
           id: "prepare",
           kind: "code",
+          title: "Prepare generation",
           source:
             'const { item } = await env.INPUT.read({});\nreturn { prompt: item.beat + ", " + item.style };',
           input: object({ item: beatItem }),
@@ -621,6 +603,7 @@ const storyboardDefinition: WorkflowDefinition = {
         {
           id: "panel",
           kind: "app",
+          title: "Make a panel",
           app: "prints",
           method: "generateImage",
           methodDigest: "fixture-prints-generate-image",
@@ -646,6 +629,7 @@ const storyboardDefinition: WorkflowDefinition = {
         {
           id: "decision",
           kind: "transform",
+          title: "Review decision",
           fields: { choice: from("keep", "choice") },
         },
       ],

@@ -102,7 +102,11 @@ writes `workflows/<id>.json` to the installation's `trellis` git repository and
 tags it `<id>@v<n>`, so every version that ever ran stays readable. Pick an old
 version in the version menu and choose **Restore as draft** to edit it again. A
 run records the exact version it started from, and Oyster checks the caller's
-permissions again before each step.
+permissions again before each step. A step can carry its own `title` and `note`
+in the definition, so renaming one makes a new version; comment `frames` and
+body-graph positions (`<graphId>/<nodeId>`) sit beside `layout` in the file and
+never change a version's digest. Every one of these keys is optional, so a
+workflow stored without them loads and publishes unchanged.
 
 ## Agent tools
 

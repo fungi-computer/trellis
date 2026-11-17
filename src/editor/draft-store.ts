@@ -5,12 +5,18 @@ import {
   publicationElsewhere,
   publicationFailed,
 } from "@fungi.computer/workflows-wire";
-import type { provenanceSchema } from "@fungi.computer/workflows-wire";
+import type { Frames, provenanceSchema } from "@fungi.computer/workflows-wire";
 
 /** Layout never enters compilation or changes a plan's identity. */
 export type Draft = Readonly<{
   definition: WorkflowDefinition;
+  /**
+   * Node positions: a root node's id, or `<graphId>/<nodeId>` for a body
+   * graph's node.
+   */
   layout: Readonly<Record<string, Readonly<{ x: number; y: number }>>>;
+  /** Comment frames; absent until a person draws one. */
+  frames?: Frames;
   provenance?: z.output<typeof provenanceSchema>;
 }>;
 export type DraftDocument = Readonly<{

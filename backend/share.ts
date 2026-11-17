@@ -12,13 +12,14 @@ import {
   type Issue,
 } from "@fungi.computer/braid";
 import {
+  framesSchema,
   provenanceSchema,
   shareReview,
   shareCopyReply,
   shareExportReply,
 } from "@fungi.computer/workflows-wire";
 import type { WorkflowDraft } from "@fungi.computer/workflows-wire";
-import type { createWorkflowLibrary } from "./library.js";
+import { retainedDraft, type createWorkflowLibrary } from "./library.js";
 
 const workflowId = S.declare(
   (value): value is string => workflowIdSchema.safeParse(value).success,
@@ -30,6 +31,13 @@ export const shareBundleSchema = S.Struct({
   format: S.Literal("fungi.workflow-share/v1"),
   definition: workflowDefinitionSchema,
   layout: S.Record(S.String, S.Struct({ x: S.Finite, y: S.Finite })),
+  // Optional: a bundle exported before frames existed has none.
+  frames: S.optionalKey(
+    S.declare(
+      (value): value is z.output<typeof framesSchema> =>
+        framesSchema.safeParse(value).success,
+    ),
+  ),
   source: S.Struct({
     workflowId,
     version: S.Number.pipe(S.check(S.isInt()), S.check(S.isGreaterThan(0))),
@@ -41,43 +49,51 @@ type Bundle = typeof shareBundleSchema.Type;
 type Provenance = z.output<typeof provenanceSchema>;
 const maxShareBytes = 512 * 1024;
 
+const graphsOf = (definition: WorkflowDefinition) => [
+  { id: "root", graph: definition },
+  ...Object.entries(definition.subgraphs ?? {}).map(([id, graph]) => ({
+    id,
+    graph,
+  })),
+];
+
+/**
+ * Every App step, in the root graph or a body, whose method writes or posts
+ * (catalog effect `write` or `external`). A share's review lists them, and a
+ * test run asks before starting any.
+ */
+function writeSteps(definition: WorkflowDefinition, catalog: Catalog) {
+  return graphsOf(definition).flatMap(({ id, graph }) =>
+    graph.nodes.flatMap((node) => {
+      if (node.kind !== "app") return [];
+      const appId = definition.apps[node.app]?.appId;
+      const method =
+        appId === undefined ? undefined : catalog[appId]?.methods[node.method];
+      return method?.effect === "write" || method?.effect === "external"
+        ? [
+            {
+              graph: id,
+              node: node.id,
+              appId,
+              method: node.method,
+              effect: method.effect,
+            },
+          ]
+        : [];
+    }),
+  );
+}
+
 function review(definition: WorkflowDefinition, catalog: Catalog) {
-  const graphs = [
-    { id: "root", graph: definition },
-    ...Object.entries(definition.subgraphs ?? {}).map(([id, graph]) => ({
-      id,
-      graph,
-    })),
-  ];
   return shareReview.parse({
-    gitAccess: graphs.flatMap(({ id, graph }) =>
+    gitAccess: graphsOf(definition).flatMap(({ id, graph }) =>
       graph.nodes.flatMap((node) =>
         node.kind === "app" && node.gitAccess
           ? [{ graph: id, node: node.id, ...node.gitAccess }]
           : [],
       ),
     ),
-    writeNodes: graphs.flatMap(({ id, graph }) =>
-      graph.nodes.flatMap((node) => {
-        if (node.kind !== "app") return [];
-        const appId = definition.apps[node.app]?.appId;
-        const method =
-          appId === undefined
-            ? undefined
-            : catalog[appId]?.methods[node.method];
-        return method?.effect === "write" || method?.effect === "external"
-          ? [
-              {
-                graph: id,
-                node: node.id,
-                appId,
-                method: node.method,
-                effect: method.effect,
-              },
-            ]
-          : [];
-      }),
-    ),
+    writeNodes: writeSteps(definition, catalog),
     triggers: definition.triggers ?? [],
   });
 }
@@ -112,7 +128,7 @@ export function createWorkflowShare({
 }) {
   async function save(
     workflowId: string,
-    draft: Pick<WorkflowDraft, "definition" | "layout">,
+    draft: Pick<WorkflowDraft, "definition" | "layout" | "frames">,
     provenance: Provenance,
   ) {
     const wanted = [
@@ -126,7 +142,7 @@ export function createWorkflowShare({
     if (issues.length) return shareCopyReply.parse({ kind: "invalid", issues });
     const result = await library.saveDraft(
       workflowId,
-      { definition: draft.definition, layout: draft.layout, provenance },
+      retainedDraft({ ...draft, provenance }),
       0,
     );
     return shareCopyReply.parse(
@@ -150,13 +166,17 @@ export function createWorkflowShare({
       if (!document) return { kind: "not_found" as const };
       let source: Bundle["source"] = { ...input, commit: document.commit };
       if (origin !== undefined) source = { ...source, origin };
+      const kept = retainedDraft(document);
+      const content = {
+        format: "fungi.workflow-share/v1",
+        definition: kept.definition,
+        layout: kept.layout,
+        source,
+      };
       const bundle: Bundle = S.decodeUnknownSync(shareBundleSchema)(
-        {
-          format: "fungi.workflow-share/v1",
-          definition: document.definition,
-          layout: document.layout,
-          source,
-        },
+        kept.frames === undefined
+          ? content
+          : { ...content, frames: kept.frames },
         { onExcessProperty: "error" },
       );
       const bytes = JSON.stringify(bundle);
@@ -186,7 +206,11 @@ export function createWorkflowShare({
       const bundle = parsed.success;
       return save(
         input.workflowId,
-        { definition: copyTitled(bundle.definition), layout: bundle.layout },
+        retainedDraft({
+          definition: copyTitled(bundle.definition),
+          layout: bundle.layout,
+          frames: bundle.frames,
+        }),
         provenanceSchema.parse({
           kind: "import",
           ...bundle.source,
@@ -206,10 +230,11 @@ export function createWorkflowShare({
       if (!document) return { kind: "not_found" as const };
       return save(
         input.workflowId,
-        {
+        retainedDraft({
           definition: copyTitled(document.definition),
           layout: document.layout,
-        },
+          frames: document.frames,
+        }),
         provenanceSchema.parse({
           kind: "fork",
           workflowId: input.sourceWorkflowId,

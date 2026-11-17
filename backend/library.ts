@@ -31,24 +31,30 @@ import {
   workflowLibraryRepository,
   type WorkflowDraft,
 } from "@fungi.computer/workflows-wire";
+/** The stored parts of a draft; frames and provenance appear only when present. */
 export function retainedDraft(draft: {
   readonly definition: WorkflowDraft["definition"];
   readonly layout: WorkflowDraft["layout"];
+  readonly frames?: WorkflowDraft["frames"];
   readonly provenance?: WorkflowDraft["provenance"];
 }): WorkflowDraft {
   const content = { definition: draft.definition, layout: draft.layout };
-  if (draft.provenance !== undefined)
-    return { ...content, provenance: draft.provenance };
-  return content;
+  const framed =
+    draft.frames === undefined ? content : { ...content, frames: draft.frames };
+  return draft.provenance === undefined
+    ? framed
+    : { ...framed, provenance: draft.provenance };
 }
+/** The file's bytes: the definition, then layout, frames and provenance when present. */
 export function serializedDraft(draft: WorkflowDraft) {
-  const content = {
-    ...draft.definition,
-    layout: draft.layout,
-  };
-  if (draft.provenance !== undefined)
-    return JSON.stringify({ ...content, provenance: draft.provenance });
-  return JSON.stringify(content);
+  const content = { ...draft.definition, layout: draft.layout };
+  const framed =
+    draft.frames === undefined ? content : { ...content, frames: draft.frames };
+  return JSON.stringify(
+    draft.provenance === undefined
+      ? framed
+      : { ...framed, provenance: draft.provenance },
+  );
 }
 const repository = workflowLibraryRepository;
 const filePath = workflowFilePath;

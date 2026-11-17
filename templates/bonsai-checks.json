@@ -29,6 +29,7 @@
       {
         "id": "change",
         "kind": "code",
+        "title": "Read the change",
         "input": {
           "type": "object",
           "properties": {
@@ -91,6 +92,7 @@
       {
         "id": "running",
         "kind": "app",
+        "title": "Report running",
         "app": "bonsai",
         "method": "checks.report",
         "methodDigest": "sha256:d9955fde688998be9ab0351216883fc9d80a40a3cd91d5587525303897c4713e",
@@ -130,6 +132,7 @@
       {
         "id": "command",
         "kind": "code",
+        "title": "Build the test command",
         "input": {
           "type": "object",
           "properties": {
@@ -184,6 +187,7 @@
       {
         "id": "tests",
         "kind": "app",
+        "title": "Run the tests",
         "app": "shed",
         "method": "runCommand",
         "methodDigest": "sha256:45f7cec235f99fc844918c1510e73851492c3513323d59cfa5a9d396f6117d68",
@@ -207,6 +211,7 @@
       {
         "id": "result",
         "kind": "code",
+        "title": "Read the result",
         "source": "const result = await env.INPUT.read({});\nconst passed = !(\"error\" in result) && result.exitCode === 0;\nconst summary = \"error\" in result ? result.error : [result.stdout, result.stderr, result.stdoutTruncated || result.stderrTruncated ? \"[output truncated]\" : \"\"].filter(Boolean).join(\"\\n\");\nreturn { status: passed ? \"passed\" : \"failed\", summary: summary.slice(-4000) };\n",
         "input": {
           "anyOf": [
@@ -344,6 +349,7 @@
       {
         "id": "reported",
         "kind": "app",
+        "title": "Report the result",
         "app": "bonsai",
         "method": "checks.report",
         "methodDigest": "sha256:d9955fde688998be9ab0351216883fc9d80a40a3cd91d5587525303897c4713e",

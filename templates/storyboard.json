@@ -65,6 +65,7 @@
       {
         "id": "beatInputs",
         "kind": "transform",
+        "title": "Beat inputs",
         "fields": {
           "items": {
             "each": {
@@ -118,6 +119,7 @@
       {
         "id": "beats",
         "kind": "map",
+        "title": "Each beat",
         "over": {
           "node": "beatInputs",
           "port": "items"
@@ -129,6 +131,7 @@
       {
         "id": "contactSheet",
         "kind": "code",
+        "title": "Contact sheet",
         "source": "const { shots } = await env.INPUT.read({});\nconst rows = shots.map((shot, index) => {\n  const title = shot.beat.replace(/[\\r\\n]+/g, \" \");\n  const panel = shot.panel?.destination?.path;\n  const clip = shot.clip?.destination?.path;\n  const lines = [\"## \" + (index + 1) + \". \" + title, \"Decision: \" + shot.choice];\n  if (panel) lines.push(\"![Panel](\" + panel + \")\", \"Prints panel: `\" + panel + \"`\");\n  if (clip) lines.push(\"Prints clip: `\" + clip + \"`\");\n  if (shot.note) lines.push(\"Review note: \" + shot.note);\n  if (shot.refusal) lines.push(\"Generation refusal: \" + JSON.stringify(shot.refusal));\n  return lines.join(\"\\n\\n\");\n});\nreturn \"# Storyboard contact sheet and shot list\\n\\n\" + rows.join(\"\\n\\n\");",
         "input": {
           "type": "object",
@@ -231,6 +234,7 @@
           {
             "id": "revise",
             "kind": "repeat",
+            "title": "Try until kept",
             "body": "attempt",
             "maxRounds": 3,
             "until": {
@@ -249,6 +253,7 @@
           {
             "id": "selection",
             "kind": "code",
+            "title": "Review decision",
             "source": "const { result } = await env.INPUT.read({});\nreturn { choice: result.choice ?? \"failed\", panel: result.panel ?? null, note: result.note ?? \"\", refusal: result.refusal ?? null };",
             "input": {
               "type": "object",
@@ -319,6 +324,7 @@
           {
             "id": "animate",
             "kind": "condition",
+            "title": "Animate this beat?",
             "test": {
               "op": "eq",
               "left": {
@@ -335,6 +341,7 @@
           {
             "id": "animation",
             "kind": "code",
+            "title": "Prepare animation",
             "source": "const { panel, item } = await env.INPUT.read({});\nif (!panel?.destination?.path) throw new Error(\"An approved panel is required for animation.\");\nreturn { path: panel.destination.path, prompt: \"Animate this approved storyboard panel: \" + item.beat, aspect: item.aspect };",
             "input": {
               "type": "object",
@@ -439,6 +446,7 @@
           {
             "id": "clip",
             "kind": "app",
+            "title": "Animate the panel",
             "app": "prints",
             "method": "generateVideo",
             "methodDigest": "sha256:405f713d6a23f1a653492f8a727a869523bb47358834cf53238b582f4dbca5dd",
@@ -490,6 +498,7 @@
           {
             "id": "shot",
             "kind": "transform",
+            "title": "Shot record",
             "fields": {
               "beat": {
                 "from": {
@@ -605,6 +614,7 @@
           {
             "id": "generation",
             "kind": "code",
+            "title": "Prepare generation",
             "source": "const { item, previous } = await env.INPUT.read({});\nconst [width, height] = item.aspect === \"9:16\" ? [864, 1536] : item.aspect === \"1:1\" ? [1024, 1024] : [1536, 864];\nreturn { prompt: [item.beat, item.style.notes ?? \"\", previous.note ?? \"\"].filter(Boolean).join(\"\\n\"), width, height, references: item.style.references ?? [] };",
             "input": {
               "type": "object",
@@ -719,6 +729,7 @@
           {
             "id": "panel",
             "kind": "app",
+            "title": "Generate the panel",
             "app": "prints",
             "method": "generateImage",
             "methodDigest": "sha256:72e7935c1cf3c6c252166beef7247a9bf81cfa72e7955c3cc736cc27855ec19f",

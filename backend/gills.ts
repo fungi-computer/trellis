@@ -5,6 +5,7 @@ type GillRow = ReturnType<AppBackendGill["rows"]>["rows"][number];
 
 /** The installation's saved library supplies one page, without a Git rebuild. */
 export const workflowLibraryGill = defineAppGill({
+  view: "rows",
   id: "workflow-library",
   title: "Workflow Library",
   source: "listWorkflows",
