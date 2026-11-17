@@ -1,5 +1,23 @@
 # @fungi.computer/trellis
 
+## 0.16.0
+
+### Minor Changes
+
+- Changes since 0.15.7:
+
+  - feat(apps): require one host-derived caller scope
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.20.0
+  - @fungi.computer/puffball@0.10.0
+  - @fungi.computer/braid@0.4.24
+  - @fungi.computer/workflows-wire@0.4.24
+  - @fungi.computer/shiitake-extensions@0.11.5
+
 ## 0.15.7
 
 ### Patch Changes
