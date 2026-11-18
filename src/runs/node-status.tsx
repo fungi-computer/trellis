@@ -5,12 +5,12 @@ import {
 import type { NodeState } from "./run-state.js";
 /** What a step's state says on its card, in a person's words. */
 export const nodeStateWords = {
-  queued: "Waiting",
+  queued: "Not yet",
   running: "Running",
   waiting: "Waiting on you",
   complete: "Done",
   failed: "Failed",
-  skipped: "Skipped",
+  skipped: "Not reached",
   cancelled: "Cancelled",
 } satisfies Record<NodeState, string>;
 const tones = {

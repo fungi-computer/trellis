@@ -266,6 +266,7 @@ export const checkRun24: RedesignRun = {
     planDigest,
     outcome: "active",
     title: "Bonsai change #41 · Add tag filter to notes list",
+    input: {},
     status: "running",
     output: null,
     error: null,
@@ -277,6 +278,7 @@ export const checkRun24: RedesignRun = {
         attempt: 0,
         state: "complete",
         durationMs: 200,
+        output: {},
         recordedAt: utc(11, 19, 1),
       },
       {
@@ -285,6 +287,7 @@ export const checkRun24: RedesignRun = {
         attempt: 0,
         state: "complete",
         durationMs: 400,
+        output: {},
         recordedAt: utc(11, 19, 2),
       },
       {
@@ -311,6 +314,7 @@ export const checkRun23: RedesignRun = {
     planDigest,
     outcome: "terminal",
     title: "Bonsai change #40 · Fix culvert map pins",
+    input: {},
     status: "failed",
     output: null,
     error: { message: "Shed stopped the command after the 10-minute limit." },
@@ -322,6 +326,7 @@ export const checkRun23: RedesignRun = {
         attempt: 0,
         state: "complete",
         durationMs: 200,
+        output: {},
         recordedAt: utc(10, 52, 1),
       },
       {
@@ -330,6 +335,7 @@ export const checkRun23: RedesignRun = {
         attempt: 0,
         state: "complete",
         durationMs: 400,
+        output: {},
         recordedAt: utc(10, 52, 2),
       },
       {
@@ -441,6 +447,68 @@ export const weeklyCover: Draft = {
     approve: { x: 768, y: 0 },
     save: { x: 1024, y: 0 },
   },
+};
+
+/** Run 1 of Weekly cover image: the cover is made and the run waits on a person to approve it. */
+export const coverRun1: RedesignRun = {
+  status: {
+    runId: "cover-run-1",
+    planDigest: "fixture-plan-weekly-cover-v1",
+    outcome: "active",
+    title: "Weekly cover image",
+    input: { scheduledAt: "2026-11-17T09:00:00.000Z" },
+    status: "waiting",
+    output: null,
+    error: null,
+    reviews: [
+      {
+        status: "pending",
+        review: {
+          nodeId: "approve",
+          iteration: "root",
+          title: "Use this cover?",
+          show: ["covers/preview.png"],
+          choices: ["use", "another", "skip"],
+        },
+      },
+    ],
+    events: [
+      {
+        nodeId: "prompt",
+        iteration: "root",
+        attempt: 0,
+        state: "complete",
+        durationMs: 100,
+        recordedAt: utc(9, 0, 1),
+        output: {
+          prompt:
+            "A quiet moss-covered forest path at dawn, soft light, flat illustration",
+        },
+      },
+      {
+        nodeId: "cover",
+        iteration: "root",
+        attempt: 0,
+        state: "complete",
+        durationMs: 6100,
+        recordedAt: utc(9, 0, 8),
+        output: { image: "covers/preview.png" },
+      },
+      {
+        nodeId: "approve",
+        iteration: "root",
+        attempt: 0,
+        state: "waiting",
+        recordedAt: utc(9, 0, 8),
+      },
+    ],
+  },
+  startedBy: "Every Monday 09:00",
+  startedAt: "09:00",
+  commit: "7c1f0aa",
+  trigger: { state: "Done", durationMs: 100 },
+  previews: {},
+  line: "Waiting on you",
 };
 
 /** What the tested "Make the cover" node shows. */

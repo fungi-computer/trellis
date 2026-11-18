@@ -1,5 +1,32 @@
 # @fungi.computer/trellis
 
+## 0.20.0
+
+### Minor Changes
+
+- Changes since 0.19.1:
+
+  - fix(trellis): follow a run's step only until the person pans or zooms
+  - fix(trellis): open a run at a readable zoom, name steps by title, say a
+    failure once
+  - fix(trellis): read the story preview through a map so the lint rule holds
+  - fix(trellis): drop the canvas drop handler integration removed from Runs
+  - fix(trellis): import humanTitle from its own module in the step catalog
+  - fix(trellis): fit the whole run on open, keep controls inside, say a failure
+    once
+  - fix(trellis): word an unreached step as this run's, not a draft's last run
+  - fix(trellis): frame a run's current step without waiting on an animation
+  - feat(trellis): draw a run on the canvas, with the review in the right panel
+  - feat(trellis): ask before a test really writes or posts
+  - feat(trellis): test a saved draft as a Test run
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/braid@0.6.0
+  - @fungi.computer/workflows-wire@0.6.0
+
 ## 0.19.1
 
 ### Patch Changes

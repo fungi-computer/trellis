@@ -1,5 +1,6 @@
 import { formatMoney } from "@fungi.computer/caps/lib/format-money";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
 import {
   Dialog,
   DialogContent,
@@ -23,13 +24,22 @@ import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import type { WorkflowRunListItem } from "@fungi.computer/workflows-wire";
 import { versionRelativeTime } from "../history/relative-time.js";
 import { nodePorts } from "../editor/graph.js";
+import { WorkflowCanvas } from "../editor/canvas.js";
+import type { NodeAddress } from "../editor/graph-address.js";
+import { nodePresentation } from "../editor/graph-presentation.js";
 import type { Draft, DraftCatalog } from "../editor/draft-store.js";
 import type { WorkflowClient } from "../workflow-client.js";
 import { definitionAppIds } from "../../backend/catalog.js";
 import { useChrome } from "../chrome.js";
 import { ReviewDock } from "./review-dock.js";
 import { NodeStatus } from "./node-status.js";
-import { OutputError, type ReadMedia } from "./output-preview.js";
+import {
+  OutputError,
+  outputErrorText,
+  type ReadMedia,
+} from "./output-preview.js";
+import { RunAgain } from "./run-again.js";
+import { RunViewLayout } from "./run-view-layout.js";
 import {
   runBeadState,
   runLatestLine,
@@ -38,8 +48,14 @@ import {
   runSteps,
   type RunStatus,
 } from "./run-state.js";
-import { RunTimeline, type OpenInApp } from "./run-timeline.js";
-import { formatDuration, runFinish, timelineItems } from "./timeline-items.js";
+import { RunStrip, RunTimeline, type OpenInApp } from "./run-timeline.js";
+import {
+  formatDuration,
+  runFinish,
+  runCanvasSteps,
+  runNodeStates,
+  timelineItems,
+} from "./timeline-items.js";
 import { useRun } from "./use-run.js";
 import { useRunSummaries } from "./use-run-summaries.js";
 export type { OpenInApp } from "./run-timeline.js";
@@ -49,6 +65,7 @@ const sourceLabel = {
   event: "Event",
   agent: "Agent",
   key: "Key",
+  test: "Test",
 } satisfies Record<WorkflowRunListItem["source"], string>;
 /**
  * The trigger's own label, or the source's generic name while it loads.
@@ -64,13 +81,14 @@ function startedByLabel(
     | undefined,
   viewerId: string | null,
 ): string {
-  if (item.source === "manual") {
+  if (item.source === "manual" || item.source === "test") {
     if (item.initiatedBy.kind !== "member") return "Unknown";
     return item.initiatedBy.memberId === viewerId ? "You" : "Another member";
   }
   if (item.source === "agent") return "An Agent";
   if (item.source === "key") return "An API key";
-  const trigger = definition?.triggers?.find((t) => t.id === item.triggerId);
+  const triggerId = "triggerId" in item ? item.triggerId : undefined;
+  const trigger = definition?.triggers?.find((t) => t.id === triggerId);
   if (!trigger) return sourceLabel[item.source];
   if (trigger.on === "schedule") return "schedule";
   if (trigger.on === "event" && trigger.event !== undefined)
@@ -84,6 +102,8 @@ function RunDetail({
   openIn,
   onStatus,
   viewerId,
+  compact,
+  onRun,
 }: {
   client: WorkflowClient;
   item: WorkflowRunListItem;
@@ -91,6 +111,9 @@ function RunDetail({
   openIn?: OpenInApp;
   onStatus: (run: RunStatus) => void;
   viewerId: string | null;
+  compact: boolean;
+  /** Open the run that "Run again" started. */
+  onRun: (runId: string) => void;
 }) {
   const { run: loaded, error, refresh } = useRun(client, item.runId);
   const run = loaded ?? undefined;
@@ -98,19 +121,27 @@ function RunDetail({
     if (run) onStatus(run);
   }, [run, onStatus]);
   const [graph, setGraph] = useState<
-    (Pick<DraftCatalog, "catalog" | "appDisplay"> & { draft: Draft }) | null
+    | (Pick<DraftCatalog, "catalog" | "appDisplay"> & {
+        draft: Draft;
+        /** The saved draft's revision, when this is the draft (a test run). */
+        revision: number | undefined;
+      })
+    | null
   >(null);
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [graphError, setGraphError] = useState(false);
   const [graphAttempt, setGraphAttempt] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState(false);
+  // A test ran a draft and has no commit: it shows the draft as saved now.
+  const commit = "commit" in item ? item.commit : null;
   useEffect(() => {
     let active = true;
     setGraph(null);
     setGraphError(false);
     void client
-      .loadWorkflow(item.workflowId, { commit: item.commit })
+      .loadWorkflow(item.workflowId, commit === null ? "draft" : { commit })
       .then(async (draft) => {
         if (!draft) {
           if (active) setGraphError(true);
@@ -122,6 +153,7 @@ function RunDetail({
         if (!active) return;
         setGraph({
           draft,
+          revision: "revision" in draft ? draft.revision : undefined,
           catalog,
           appDisplay: Object.fromEntries(
             apps.map(({ appId, displayName, icon }) => [
@@ -138,7 +170,7 @@ function RunDetail({
     return () => {
       active = false;
     };
-  }, [client, item.workflowId, item.commit, graphAttempt]);
+  }, [client, item.workflowId, commit, graphAttempt]);
   async function cancel() {
     setCancelling(true);
     setCancelError(false);
@@ -169,157 +201,245 @@ function RunDetail({
   );
   const finished = run !== undefined && runSection(run) === "finished";
   const finish = runFinish(steps, items, progress.costMilliunits);
-  const scroller = useRef<HTMLDivElement>(null);
-  const newest = `${String(items.length)}:${String(pending.length)}`;
-  useEffect(() => {
-    const element = scroller.current;
-    if (element && newest !== "") element.scrollTop = element.scrollHeight;
-  }, [newest]);
-  return (
-    <section
-      className="wf-run-detail"
-      aria-label="Selected run"
-      data-run-id={item.runId}
-    >
-      <header className="wf-actions">
-        <h2>{run?.title ?? item.title ?? "Workflow title unavailable"}</h2>
-        <span className="wf-muted">
-          Started by {startedByLabel(item, graph?.draft.definition, viewerId)} ·{" "}
-          <time dateTime={new Date(item.startedAt).toISOString()}>
-            {versionRelativeTime(new Date(item.startedAt).toISOString())}
-          </time>
-        </span>
-        {run?.outcome === "active" ? (
-          <Dialog
-            open={confirming}
-            onOpenChange={(next, details) => {
-              if (cancelling) {
-                details.cancel();
-                return;
-              }
-              setConfirming(next);
-            }}
-          >
-            <DialogTrigger render={<Button variant="ghost" size="sm" />}>
-              Cancel run
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Cancel this run?</DialogTitle>
-                <DialogDescription>
-                  Cancellation cannot be undone. Completed work is kept;
-                  unfinished steps stop.
-                </DialogDescription>
-              </DialogHeader>
-              {cancelError ? (
-                <p role="alert">Run could not be cancelled. Try again.</p>
-              ) : null}
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  disabled={cancelling}
-                  onClick={() => {
-                    setConfirming(false);
-                  }}
-                >
-                  Keep running
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={cancelling}
-                  onClick={() => void cancel()}
-                >
-                  {cancelling ? "Cancelling…" : "Confirm cancellation"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </header>
-      {error ? (
-        <FailureLine message="Run could not be loaded." onRetry={refresh} />
-      ) : null}
-      {graphError ? (
-        <FailureLine
-          message="The steps for this run could not be loaded."
-          onRetry={() => {
-            setGraphAttempt((value) => value + 1);
-          }}
-        />
-      ) : null}
-      {pending.map(({ review }) => {
-        const definition = graph?.draft.definition;
-        const candidates = definition
-          ? [
-              definition,
-              ...Object.values(definition.subgraphs ?? {}).map((subgraph) => ({
-                ...definition,
-                ...subgraph,
-              })),
-            ].flatMap((scope) =>
-              scope.nodes
-                .filter(
-                  (node) => node.kind === "review" && node.id === review.nodeId,
-                )
-                .map((node) => ({ scope, node })),
-            )
-          : [];
-        // Run reviews identify a node and iteration; repeated ids cannot identify a graph.
-        const resolved = candidates.length === 1 ? candidates[0] : undefined;
-        const node = resolved?.node;
-        const ref = node?.kind === "review" ? node.show[0] : undefined;
-        const format =
-          ref && graph && resolved
-            ? Object.entries(
-                nodePorts(resolved.scope, graph.catalog, ref.node).outputs,
-              ).find(([port]) => port === ref.port)?.[1].format
-            : undefined;
-        return (
-          <ReviewDock
-            key={`${review.nodeId}:${review.iteration}`}
-            runId={item.runId}
-            review={review}
-            detail={node?.kind === "review" ? node.detail : undefined}
-            choices={node?.kind === "review" ? node.choices : undefined}
-            format={format}
-            readMedia={readMedia}
-            answerReview={client.answerReview}
-            onAnswered={refresh}
-          />
+  const definition = graph?.draft.definition;
+  const nodeStates = definition
+    ? runNodeStates(steps, definition, finished)
+    : undefined;
+  // The first step that failed, in the words the run recorded for it.
+  const failed = items.find((entry) => entry.state === "failed");
+  // The failed step says why once, under "What happened"; its row stays short.
+  const rows = items.map((entry) =>
+    entry === failed ? { ...entry, detail: undefined } : entry,
+  );
+  const shown =
+    selectedNode === null
+      ? rows
+      : rows.filter(
+          (entry) =>
+            entry.step.graphId === undefined &&
+            entry.step.nodeId === selectedNode,
         );
-      })}
-      <div className="wf-run-timeline" ref={scroller}>
-        {!graph && !graphError ? (
-          <LoadingState message="Loading steps…" />
-        ) : null}
-        <RunTimeline items={items} readMedia={readMedia} openIn={openIn} />
-        {run?.error !== null && run?.error !== undefined ? (
-          <OutputError error={run.error} />
-        ) : null}
-        {finished ? (
-          <p className="wf-finish">
-            <NodeStatus
-              state={runBeadState(run)}
-              bare
-              label={run.outcome === "cancelled" ? "cancelled" : run.status}
+  const selected: NodeAddress | null =
+    selectedNode === null ? null : { graphId: "root", nodeId: selectedNode };
+  const strip =
+    graph && nodeStates
+      ? graph.draft.definition.nodes.map((node) => ({
+          id: node.id,
+          title: nodePresentation(
+            graph.draft.definition,
+            graph.catalog,
+            node,
+            graph.appDisplay,
+          ).title,
+          state: nodeStates[node.id] ?? "queued",
+        }))
+      : [];
+  return (
+    <RunViewLayout
+      runId={item.runId}
+      waiting={pending.length > 0}
+      header={
+        <>
+          <h2>{run?.title ?? item.title ?? "Workflow title unavailable"}</h2>
+          <span className="wf-muted">
+            Started by {startedByLabel(item, graph?.draft.definition, viewerId)}{" "}
+            ·{" "}
+            <time dateTime={new Date(item.startedAt).toISOString()}>
+              {versionRelativeTime(new Date(item.startedAt).toISOString())}
+            </time>
+          </span>
+          {finished ? (
+            <RunAgain
+              client={client}
+              item={item}
+              input={run.input}
+              draftRevision={graph?.revision}
+              onRun={onRun}
             />
-            <span>
-              {run.outcome === "cancelled"
-                ? "Cancelled"
-                : runBeadState(run) === "failed"
-                  ? "Failed"
-                  : `Done${finish.elapsed === undefined ? "" : ` in ${formatDuration(finish.elapsed)}`}`}
-              {finish.apps > 0
-                ? ` · ${String(finish.apps)} ${finish.apps === 1 ? "App" : "Apps"}`
-                : ""}
-              {finish.cost === null
-                ? ""
-                : ` · ${formatMoney(finish.cost / 100_000)}`}
-            </span>
-          </p>
-        ) : null}
-      </div>
-    </section>
+          ) : null}
+          {run?.outcome === "active" ? (
+            <Dialog
+              open={confirming}
+              onOpenChange={(next, details) => {
+                if (cancelling) {
+                  details.cancel();
+                  return;
+                }
+                setConfirming(next);
+              }}
+            >
+              <DialogTrigger render={<Button variant="ghost" size="sm" />}>
+                Cancel run
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Cancel this run?</DialogTitle>
+                  <DialogDescription>
+                    Cancellation cannot be undone. Completed work is kept;
+                    unfinished steps stop.
+                  </DialogDescription>
+                </DialogHeader>
+                {cancelError ? (
+                  <p role="alert">Run could not be cancelled. Try again.</p>
+                ) : null}
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
+                    disabled={cancelling}
+                    onClick={() => {
+                      setConfirming(false);
+                    }}
+                  >
+                    Keep running
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={cancelling}
+                    onClick={() => void cancel()}
+                  >
+                    {cancelling ? "Cancelling…" : "Confirm cancellation"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : null}
+        </>
+      }
+      canvas={
+        compact || !graph || !nodeStates ? undefined : (
+          <ReactFlowProvider>
+            <WorkflowCanvas
+              readOnly
+              draft={graph.draft}
+              catalog={graph.catalog}
+              appDisplay={graph.appDisplay}
+              issues={[]}
+              nodeStates={nodeStates}
+              nodeResults={runCanvasSteps(steps, nodeStates)}
+              readMedia={readMedia}
+              selected={selected}
+              onSelect={(address) => {
+                setSelectedNode(address?.nodeId ?? null);
+              }}
+              onMove={() => undefined}
+              onConnect={() => undefined}
+              onRemove={() => undefined}
+              onDisconnect={() => undefined}
+            />
+          </ReactFlowProvider>
+        )
+      }
+      strip={compact && graph ? <RunStrip steps={strip} /> : undefined}
+      panel={
+        <>
+          {error ? (
+            <FailureLine message="Run could not be loaded." onRetry={refresh} />
+          ) : null}
+          {graphError ? (
+            <FailureLine
+              message="The steps for this run could not be loaded."
+              onRetry={() => {
+                setGraphAttempt((value) => value + 1);
+              }}
+            />
+          ) : null}
+          {pending.map(({ review }) => {
+            const candidates = definition
+              ? [
+                  definition,
+                  ...Object.values(definition.subgraphs ?? {}).map(
+                    (subgraph) => ({
+                      ...definition,
+                      ...subgraph,
+                    }),
+                  ),
+                ].flatMap((scope) =>
+                  scope.nodes
+                    .filter(
+                      (node) =>
+                        node.kind === "review" && node.id === review.nodeId,
+                    )
+                    .map((node) => ({ scope, node })),
+                )
+              : [];
+            // Run reviews identify a node and iteration; repeated ids cannot identify a graph.
+            const resolved =
+              candidates.length === 1 ? candidates[0] : undefined;
+            const node = resolved?.node;
+            const ref = node?.kind === "review" ? node.show[0] : undefined;
+            const format =
+              ref && graph && resolved
+                ? Object.entries(
+                    nodePorts(resolved.scope, graph.catalog, ref.node).outputs,
+                  ).find(([port]) => port === ref.port)?.[1].format
+                : undefined;
+            return (
+              <ReviewDock
+                key={`${review.nodeId}:${review.iteration}`}
+                runId={item.runId}
+                review={review}
+                detail={node?.kind === "review" ? node.detail : undefined}
+                choices={node?.kind === "review" ? node.choices : undefined}
+                format={format}
+                readMedia={readMedia}
+                answerReview={client.answerReview}
+                onAnswered={refresh}
+              />
+            );
+          })}
+          {failed ? (
+            <section className="wf-run-what" aria-label="What happened">
+              <h3>What happened</h3>
+              <p>{failed.detail ?? `${failed.title} failed.`}</p>
+            </section>
+          ) : null}
+          <div className="wf-run-timeline">
+            {selectedNode === null ? null : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedNode(null);
+                }}
+              >
+                Show every step
+              </Button>
+            )}
+            {!graph && !graphError ? (
+              <LoadingState message="Loading steps…" />
+            ) : null}
+            <RunTimeline items={shown} readMedia={readMedia} openIn={openIn} />
+            {run?.error !== null &&
+            run?.error !== undefined &&
+            outputErrorText(run.error) !== failed?.detail ? (
+              <OutputError error={run.error} />
+            ) : null}
+            {finished ? (
+              <p className="wf-finish">
+                <NodeStatus
+                  state={runBeadState(run)}
+                  bare
+                  label={run.outcome === "cancelled" ? "cancelled" : run.status}
+                />
+                <span>
+                  {run.outcome === "cancelled"
+                    ? "Cancelled"
+                    : runBeadState(run) === "failed"
+                      ? "Failed"
+                      : `Done${finish.elapsed === undefined ? "" : ` in ${formatDuration(finish.elapsed)}`}`}
+                  {finish.apps > 0
+                    ? ` · ${String(finish.apps)} ${finish.apps === 1 ? "App" : "Apps"}`
+                    : ""}
+                  {finish.cost === null
+                    ? ""
+                    : ` · ${formatMoney(finish.cost / 100_000)}`}
+                </span>
+              </p>
+            ) : null}
+          </div>
+        </>
+      }
+    />
   );
 }
 
@@ -498,7 +618,7 @@ export function Runs({
                           onClick={() => {
                             onSelect(item.runId, item.workflowId);
                           }}
-                          label={`${item.title ?? "Workflow title unavailable"}${item.version ? ` · v${String(item.version)}` : ""}`}
+                          label={`${item.title ?? "Workflow title unavailable"}${"version" in item && item.version ? ` · v${String(item.version)}` : ""}`}
                           description={
                             item.source === "manual"
                               ? line
@@ -534,6 +654,10 @@ export function Runs({
           openIn={openIn}
           onStatus={recordStatus}
           viewerId={viewerId}
+          compact={compact}
+          onRun={(runId) => {
+            onSelect(runId, selected.workflowId);
+          }}
         />
       ) : showDetail && items && items.length > 0 ? (
         <EmptyState

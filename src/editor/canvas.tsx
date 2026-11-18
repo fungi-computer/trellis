@@ -1,3 +1,4 @@
+import { stepFollower } from "./follow-step.js";
 import { useCatalogLoading } from "./catalog-loading.js";
 import * as S from "effect/Schema";
 import { GraphResults, nodeResultsFor } from "./graph-results.js";
@@ -113,6 +114,16 @@ const fitPadding = {
   bottom: 0.04,
   left: 0.04,
 } as const;
+/** The step a run is at: the one that failed, else waiting on a person, else running. */
+function currentNode(states: Readonly<Record<string, NodeState>> | undefined) {
+  const entries = Object.entries(states ?? {}).reverse();
+  for (const state of ["failed", "waiting", "running"] as const) {
+    const found = entries.find(([, at]) => at === state);
+    if (found) return found[0];
+  }
+  return undefined;
+}
+
 /** Where the phone's column starts inside a loop: below the Back bar, which is 16px in and about 52px tall. */
 const crumbClearance = 28;
 const minZoom = 0.25;
@@ -417,6 +428,8 @@ export function WorkflowCanvas({
   const paneWidth = useStore((store) => store.width);
   const paneHeight = useStore((store) => store.height);
   const nodeCount = draft.definition.nodes.length;
+  const runAt = currentNode(nodeStates);
+  const [follower] = useState(stepFollower);
   useEffect(() => {
     if (!initialized || narrow) return;
     const frame = requestAnimationFrame(() => {
@@ -435,7 +448,22 @@ export function WorkflowCanvas({
       if (fit.zoom >= readableZoom)
         void fitView({ padding: fitPadding, minZoom, maxZoom, nodes: all });
       else {
-        // Too wide to read at once: start at the first step, not the middle.
+        // Too wide to read at once. A run opens on the step it is at, with its
+        // neighbours around it; a draft starts at its first step.
+        const current = shown.find((node) => node.id === runAt);
+        if (current !== undefined) {
+          const view = follower.centre(
+            { width: paneWidth, height: paneHeight },
+            {
+              ...current.position,
+              width: current.measured?.width ?? 240,
+              height: current.measured?.height ?? 136,
+            },
+            readableZoom,
+          );
+          if (view !== undefined) void setViewport(view);
+          return;
+        }
         const first = shown.find((node) => node.id === "$input") ?? shown[0];
         void setViewport({
           x: 16 - first.position.x,
@@ -457,6 +485,8 @@ export function WorkflowCanvas({
     paneWidth,
     paneHeight,
     narrow,
+    runAt,
+    follower,
   ]);
   const connectionEdges = displayEdges(draft.definition, issues);
   const placed = placeNodes(draft.definition, draft.layout, measurements);
@@ -852,6 +882,10 @@ export function WorkflowCanvas({
             pointAt({ x: touch.clientX, y: touch.clientY }),
           );
         }}
+        // A person's own pan or zoom (it has an event) stops a run following its step.
+        onMoveStart={(event) => {
+          if (event !== null) follower.moved();
+        }}
         fitView={!narrow}
         defaultViewport={
           narrow ? { x: 16, y: addStepInset, zoom: 1 } : undefined
@@ -878,9 +912,16 @@ export function WorkflowCanvas({
             position="bottom-right"
             style={{ width: 180, height: 120 }}
             aria-label="Workflow overview"
-            nodeClassName={(node) =>
-              node.type === "frame" ? "wf-minimap-frame" : "wf-minimap-node"
-            }
+            nodeClassName={(node) => {
+              if (node.type === "frame") return "wf-minimap-frame";
+              const state = nodeStates?.[node.id];
+              // A run's minimap sets the step it is at apart from the rest.
+              return state === "failed" ||
+                state === "waiting" ||
+                state === "running"
+                ? `wf-minimap-node wf-minimap-${state}`
+                : "wf-minimap-node";
+            }}
           />
         )}
       </ReactFlow>

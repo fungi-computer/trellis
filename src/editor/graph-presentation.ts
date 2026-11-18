@@ -10,6 +10,7 @@ import {
   type PortSchema,
   type WorkflowDefinition,
 } from "@fungi.computer/braid";
+import { humanTitle } from "./human-title.js";
 import { methodFor } from "./graph.js";
 import { isFlowPin, pinWords, valuePinToken } from "./pins.js";
 import type { DraftDocument } from "./draft-store.js";
@@ -85,13 +86,6 @@ export function displayEdges(
         edges.push({ ...edge, id: `reference-${node.id}-${String(index)}` });
   }
   return edges;
-}
-
-export function humanTitle(id: string) {
-  const words = id
-    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/[._-]+/gu, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
 /** Port identities stay in the graph; the canvas explains their role to a reader. */

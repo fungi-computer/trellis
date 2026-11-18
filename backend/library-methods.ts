@@ -257,7 +257,7 @@ export const libraryMethods = {
   }),
   runWorkflow: defineAppMethod({
     description:
-      "Run an immutable published Workflow version or commit; drafts never execute. An optional delivery chat receives the run's ending.",
+      "Run an immutable published Workflow version or commit. To try an unpublished draft, use testDraft. An optional delivery chat receives the run's ending.",
     effect: "write",
     requires: ["workflow.run"],
     input: publishedRun,

@@ -12,17 +12,25 @@ import {
 } from "@fungi.computer/braid";
 import * as S from "effect/Schema";
 import { workflowInputField } from "./input-form.js";
+import { humanTitle } from "../editor/human-title.js";
 import type { WorkflowClient } from "../workflow-client.js";
+import type { RunStatus } from "./run-state.js";
 export function RunWorkflow({
   client,
   workflowId,
   version,
+  testRevision,
+  input: prefilled,
   autoRun = false,
   onRun,
 }: {
   client: WorkflowClient;
   workflowId: string;
   version: number | undefined;
+  /** Run the saved draft at this revision as a test, instead of a published version. */
+  testRevision?: number | undefined;
+  /** Start the form from these values (a run's own input) instead of the defaults. */
+  input?: RunStatus["input"];
   /** Run a newly published version when its defaults need no further choices. */
   autoRun?: boolean;
   onRun: (id: string) => void;
@@ -30,6 +38,8 @@ export function RunWorkflow({
   const request = useRef<{ key: string; id: string } | null>(null);
   const form = useRef<HTMLDivElement>(null);
   const autoSubmitted = useRef(false);
+  // A test that writes or posts asks once; the next submit is the confirmation.
+  const allowWrites = useRef(false);
   const [ready, setReady] = useState<{
     definition: WorkflowDefinition;
     input: PortSchema;
@@ -59,18 +69,22 @@ export function RunWorkflow({
     let active = true;
     setReady(null);
     setError(null);
-    if (version === undefined) return;
+    if (version === undefined && testRevision === undefined) return;
     void Promise.all([
-      client.listVersions(workflowId),
+      testRevision === undefined
+        ? client.listVersions(workflowId)
+        : Promise.resolve([]),
       client.catalog(),
       client.chatChoices(),
     ])
       .then(async ([versions, { apps }, chats]) => {
         const chosen = versions.find((item) => item.version === version);
-        if (!chosen) throw new Error("Version missing");
-        const doc = await client.loadWorkflow(workflowId, {
-          commit: chosen.commit,
-        });
+        if (testRevision === undefined && !chosen)
+          throw new Error("Version missing");
+        const doc = await client.loadWorkflow(
+          workflowId,
+          chosen ? { commit: chosen.commit } : "draft",
+        );
         if (!doc) throw new Error("Version missing");
         const definition = S.decodeUnknownSync(workflowDefinitionSchema)(
           doc.definition,
@@ -87,8 +101,15 @@ export function RunWorkflow({
     return () => {
       active = false;
     };
-  }, [client, workflowId, version, attempt]);
-  if (version === undefined)
+  }, [client, workflowId, version, testRevision, attempt]);
+  // What this form starts: a test of the saved draft, or a published version.
+  const target =
+    testRevision !== undefined
+      ? ({ kind: "test", revision: testRevision } as const)
+      : version !== undefined
+        ? ({ kind: "version", version } as const)
+        : undefined;
+  if (target === undefined)
     return <p>Publish a version before running this workflow.</p>;
   if (error)
     return (
@@ -142,7 +163,12 @@ export function RunWorkflow({
   const inputField = workflowInputField(ready.input);
   const schema = z.object({ input: inputField.schema, ...bindingFields });
   const defaults = Object.fromEntries([
-    ["input", inputField.defaultValue] as const,
+    [
+      "input",
+      prefilled === undefined
+        ? inputField.defaultValue
+        : JSON.stringify(prefilled),
+    ] as const,
     ["reportTo", ""] as const,
     ...bindings.map(([alias, spec]) => {
       const matches = ready.apps.filter((app) => app.appId === spec.appId);
@@ -161,7 +187,11 @@ export function RunWorkflow({
         schema={schema}
         defaultValues={defaults}
         allowClean
-        submitLabel={`Run v${String(version)}`}
+        submitLabel={
+          target.kind === "test"
+            ? "Run a test"
+            : `Run v${String(target.version)}`
+        }
         aria-label="Run workflow"
         onSubmit={async (values, raw) => {
           const selectedBindings = Object.fromEntries(
@@ -175,30 +205,57 @@ export function RunWorkflow({
               values,
               selectedBindings,
               reportTo: raw.reportTo,
+              allowWrites: allowWrites.current,
             });
             if (request.current?.key !== key)
               request.current = {
                 key,
                 id: workflowRunRequestIds.request.generate(),
               };
-            const run = {
+            const base = {
               requestId: request.current.id,
               workflowId,
-              version,
               bindings: selectedBindings,
               input: values.input,
             };
-            const result = await client.runWorkflow(
+            const delivery =
               chat === undefined
-                ? run
+                ? {}
                 : {
-                    ...run,
                     delivery: {
                       agentId: chat.agentId,
                       sessionId: chat.sessionId,
                     },
-                  },
-            );
+                  };
+            const result =
+              target.kind === "version"
+                ? await client.runWorkflow({
+                    ...base,
+                    ...delivery,
+                    version: target.version,
+                  })
+                : await client.testDraft({
+                    ...base,
+                    ...delivery,
+                    expectedRevision: target.revision,
+                    allowWrites: allowWrites.current,
+                  });
+            if ("kind" in result && result.kind === "draft_conflict")
+              return {
+                kind: "refused",
+                error:
+                  "The draft changed after this run. Open the editor, then test it again.",
+              };
+            if (
+              "kind" in result &&
+              result.kind === "writes_need_confirmation"
+            ) {
+              allowWrites.current = true;
+              return {
+                kind: "refused",
+                error: `This test really runs: ${result.steps.map((step) => `${step.appId} · ${humanTitle(step.method)}`).join(", ")}. Run it again to confirm.`,
+              };
+            }
             if (
               "kind" in result &&
               (result.kind === "started" || result.kind === "replay")

@@ -44,3 +44,33 @@
     margin-inline-start: var(--spacing-xl);
   }
 }
+
+/* The phone's one row of steps: a bead and a name each, the current one set apart. */
+.wf-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--spacing-xs);
+  /* The steps wrap onto more rows, so none is cut off and the current one shows. */
+  flex-wrap: wrap;
+}
+.wf-strip-step {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-xs);
+  border: 1px solid
+    color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: var(--radius-box);
+  font-size: var(--text-sm);
+}
+.wf-strip-step[aria-current="step"] {
+  border-color: var(--color-primary);
+}
+.wf-strip-step[data-state="queued"],
+.wf-strip-step[data-state="skipped"] {
+  opacity: 0.5;
+}

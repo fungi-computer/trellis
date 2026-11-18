@@ -335,6 +335,9 @@ export function workflowClient(
     runWorkflow: (
       input: z.input<typeof contract.runBase> & { version: number },
     ) => call("runWorkflow", input, contract.runReply),
+    /** Run the saved draft as a test, at the revision the caller saw. */
+    testDraft: (input: z.input<typeof contract.testDraftInput>) =>
+      call("testDraft", input, contract.testDraftReply),
     revertDraft: (
       workflowId: string,
       toCommit: string,

@@ -33,8 +33,9 @@ a live Oyster. To run Trellis on a real Oyster, see [Get it](#get-it).
   problems are left.
 - Add review steps, waits, conditions, repeats and maps, or a **Code** node that
   runs your own JavaScript in a sandbox with a time limit.
-- **Publish** an immutable version, then **Run** it with inputs. Drafts never
-  run.
+- **Publish** an immutable version, then **Run** it with inputs. A saved draft
+  can be tried first as a **Test** run (see `testDraft` below): it is marked
+  Test, never starts on its own, and stops at every review step.
 - Follow a run in **Runs**: each step's state, outputs, duration and cost, with
   image and video previews. Approve or reject review steps there; only a person
   can answer a review.
@@ -132,16 +133,17 @@ Agents call Trellis through Oyster's MCP endpoint, or at
 `POST $OYSTER_URL/apps/trellis/methods/<name>` with a key; see
 [Git, keys and MCP](https://github.com/fungi-computer/oyster#git-keys-and-mcp).
 
-| Method                                               | What it does                                                                       |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `catalog`                                            | Lists your installed Apps' methods, or one App's full port types.                  |
-| `listWorkflows` / `loadWorkflow`                     | Lists the library, or reads one workflow.                                          |
-| `saveDraft`                                          | Saves a draft, with a revision check so concurrent edits never clobber each other. |
-| `publishWorkflow` / `listVersions` / `revertDraft`   | Publishes a version, lists versions, or restores one as a draft.                   |
-| `runWorkflow`                                        | Runs a published version, optionally reporting the ending to a chat.               |
-| `listRuns` / `runStatus` / `cancel`                  | Lists runs, reads one run's steps and reviews, or cancels it.                      |
-| `arm` / `armEventTrigger` and their `disarm` pairs   | Arms or disarms a schedule or an App-event trigger.                                |
-| `exportWorkflow` / `importWorkflow` / `forkWorkflow` | Moves workflows in and out as JSON, or copies one.                                 |
+| Method                                               | What it does                                                                        |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `catalog`                                            | Lists your installed Apps' methods, or one App's full port types.                   |
+| `listWorkflows` / `loadWorkflow`                     | Lists the library, or reads one workflow.                                           |
+| `saveDraft`                                          | Saves a draft, with a revision check so concurrent edits never clobber each other.  |
+| `publishWorkflow` / `listVersions` / `revertDraft`   | Publishes a version, lists versions, or restores one as a draft.                    |
+| `runWorkflow`                                        | Runs a published version, optionally reporting the ending to a chat.                |
+| `testDraft`                                          | Runs the saved draft as a Test, or one step and its ancestors. Needs `allowWrites`. |
+| `listRuns` / `runStatus` / `cancel`                  | Lists runs, reads one run's steps and reviews, or cancels it.                       |
+| `arm` / `armEventTrigger` and their `disarm` pairs   | Arms or disarms a schedule or an App-event trigger.                                 |
+| `exportWorkflow` / `importWorkflow` / `forkWorkflow` | Moves workflows in and out as JSON, or copies one.                                  |
 
 `answerReview` exists too, but only a person can answer a review.
 

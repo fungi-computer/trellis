@@ -7,6 +7,7 @@ import { Monogram } from "@fungi.computer/caps/components/monogram";
 import { isSigilName, Sigil } from "@fungi.computer/sigils";
 import { NodeStatus } from "./node-status.js";
 import { MediaThumb, StepOutput, type ReadMedia } from "./output-preview.js";
+import type { NodeState } from "./run-state.js";
 import { formatDuration, type TimelineItem } from "./timeline-items.js";
 
 /** Open another App at what a step produced. */
@@ -17,6 +18,39 @@ export type OpenInApp = (
 
 /** Steps beyond this many are folded until asked for, like a tool group. */
 const RECENT = 8;
+
+/** One step of the run's own graph, as the phone strip lists it. */
+export type StripStep = Readonly<{
+  id: string;
+  title: string;
+  state: NodeState;
+}>;
+
+/**
+ * A phone has no room to draw the graph: the run is one row of its steps, each
+ * with its state, and the step that is running or waiting is the current one.
+ */
+export function RunStrip({ steps }: { steps: readonly StripStep[] }) {
+  return (
+    <ol className="wf-strip" aria-label="Run progress">
+      {steps.map((step) => (
+        <li
+          key={step.id}
+          className="wf-strip-step"
+          data-state={step.state}
+          aria-current={
+            step.state === "running" || step.state === "waiting"
+              ? "step"
+              : undefined
+          }
+        >
+          <NodeStatus state={step.state} bare />
+          <span>{step.title}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function Mark({ item }: { item: TimelineItem }) {
   if (item.app === undefined)

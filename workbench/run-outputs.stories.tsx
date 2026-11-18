@@ -102,6 +102,7 @@ function RecordedRun({ failed }: { failed: boolean }) {
               z.json().parse({
                 runId: "release-run",
                 planDigest: "fixture-digest",
+                input: {},
                 title: "Prepare a release",
                 outcome: "terminal",
                 status: failed ? "errored" : "complete",

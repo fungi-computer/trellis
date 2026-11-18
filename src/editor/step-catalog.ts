@@ -8,7 +8,7 @@ import type {
 import { createCodeNode } from "./code-node.js";
 import type { Draft, DraftDocument, Palette } from "./draft-store.js";
 import { addNode, connect, nodePorts, portOf } from "./graph.js";
-import { humanTitle } from "./graph-presentation.js";
+import { humanTitle } from "./human-title.js";
 import { isFlowPin, pinToken, type PinToken } from "./pins.js";
 
 /*

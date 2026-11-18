@@ -1,4 +1,5 @@
 import { chosenWords } from "./choice-words.js";
+import { humanTitle } from "../editor/human-title.js";
 import {
   fillReviewText,
   type LoopPosition,
@@ -106,7 +107,8 @@ function decision(node: Extract<Node, { kind: "review" }>, step: RunStep) {
 /**
  * Turn recorded steps into what a person reads: each App step says what the
  * App did (its own row when it declared one), each answered review says what
- * you chose. Plumbing that went well, and steps that never ran, stay out.
+ * you chose, and every other step that ran says so by its own name. Steps that
+ * never ran stay out.
  */
 export function timelineItems(
   steps: readonly RunStep[],
@@ -132,17 +134,29 @@ export function timelineItems(
       continue;
     }
     if (node.kind !== "app") {
+      // A step that is not an App still happened: say so in the step's own name.
+      const name = node.title ?? humanTitle(node.id);
       if (step.state === "failed")
         items.push({
           ...base,
-          title: `${node.id} failed`,
+          title: name,
           detail: step.errorMessage ?? step.refusal,
         });
+      else if (step.state === "complete")
+        items.push({
+          ...base,
+          title: name,
+          detail: detailLine(...placeWords(stepPosition(step))),
+        });
+      else if (step.state === "running")
+        items.push({ ...base, title: `${name} is running` });
       continue;
     }
     const appId = new Map(Object.entries(definition.apps)).get(node.app)?.appId;
     const display = appId === undefined ? undefined : appDisplay[appId];
     const name = display?.displayName ?? node.app;
+    // The step is named as the canvas names it, never by its method id.
+    const stepName = node.title ?? humanTitle(node.method);
     const app =
       appId === undefined
         ? undefined
@@ -153,18 +167,18 @@ export function timelineItems(
     if (step.state === "failed") {
       items.push({
         ...withApp,
-        title: `${name} could not run ${node.method}`,
+        title: stepName,
         detail: step.errorMessage ?? step.refusal,
       });
       continue;
     }
     if (step.state !== "complete") {
-      items.push({ ...withApp, title: `${name} is running ${node.method}` });
+      items.push({ ...withApp, title: `${stepName} is running` });
       continue;
     }
     const row = stepRow(step);
     if (row === undefined) {
-      items.push({ ...withApp, title: `${name} ran ${node.method}` });
+      items.push({ ...withApp, title: stepName });
       continue;
     }
     let item: TimelineItem = {
@@ -200,4 +214,47 @@ export function runFinish(
     // Only a recorded, non-zero cost is worth a line.
     cost: costMilliunits !== null && costMilliunits > 0 ? costMilliunits : null,
   };
+}
+
+/**
+ * Where each step of the run's own graph stands, for the canvas and the phone
+ * strip. A step with no record yet is "not yet" while the run is going and
+ * "not reached" once it is over.
+ */
+export function runNodeStates(
+  steps: readonly RunStep[],
+  definition: WorkflowDefinition,
+  finished: boolean,
+): Record<string, NodeState> {
+  const latest = new Map<string, NodeState>();
+  for (const step of steps)
+    if (step.graphId === undefined) latest.set(step.nodeId, step.state);
+  return Object.fromEntries(
+    definition.nodes.map((node) => [
+      node.id,
+      latest.get(node.id) ?? (finished ? "skipped" : "queued"),
+    ]),
+  );
+}
+
+/**
+ * What the canvas is given for a run on show: every recorded step, and a record
+ * of "not yet" or "not reached" for each step the run has no record of, so the
+ * canvas words them as this run's and not as a draft's last run.
+ */
+export function runCanvasSteps(
+  steps: readonly RunStep[],
+  states: Readonly<Record<string, NodeState>>,
+): RunStep[] {
+  const recorded = new Set(
+    steps.flatMap((step) => (step.graphId === undefined ? [step.nodeId] : [])),
+  );
+  return [
+    ...steps,
+    ...Object.entries(states).flatMap(([nodeId, state]) =>
+      recorded.has(nodeId)
+        ? []
+        : [{ nodeId, iteration: "0", attempt: 0, state }],
+    ),
+  ];
 }

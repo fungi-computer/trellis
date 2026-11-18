@@ -208,6 +208,15 @@
 .wf-canvas .wf-minimap-node {
   fill: color-mix(in oklab, var(--color-base-content) 35%, transparent);
 }
+.wf-canvas .wf-minimap-node.wf-minimap-running {
+  fill: var(--color-info);
+}
+.wf-canvas .wf-minimap-node.wf-minimap-waiting {
+  fill: var(--color-primary);
+}
+.wf-canvas .wf-minimap-node.wf-minimap-failed {
+  fill: var(--color-error);
+}
 .wf-canvas .wf-minimap-frame {
   fill: color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }

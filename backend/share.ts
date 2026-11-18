@@ -62,7 +62,7 @@ const graphsOf = (definition: WorkflowDefinition) => [
  * (catalog effect `write` or `external`). A share's review lists them, and a
  * test run asks before starting any.
  */
-function writeSteps(definition: WorkflowDefinition, catalog: Catalog) {
+export function writeSteps(definition: WorkflowDefinition, catalog: Catalog) {
   return graphsOf(definition).flatMap(({ id, graph }) =>
     graph.nodes.flatMap((node) => {
       if (node.kind !== "app") return [];

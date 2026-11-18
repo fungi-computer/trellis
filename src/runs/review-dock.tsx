@@ -153,6 +153,7 @@ export function ReviewDock({
             }}
           />
         ) : null}
+        <p className="wf-dock-foot wf-muted">Only a person can answer.</p>
         {error ? (
           <FailureLine
             message={error.message}

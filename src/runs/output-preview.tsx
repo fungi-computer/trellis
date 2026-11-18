@@ -101,18 +101,18 @@ export function OutputPreview({
     </div>
   );
 }
-export function OutputError({ error }: { error: Json }) {
+/** The words a recorded error is shown in. */
+export function outputErrorText(error: Json) {
   const message = messageSchema.safeParse(error);
   const text = z.string().safeParse(error);
-  return (
-    <p role="alert">
-      {message.success
-        ? message.data.message
-        : text.success
-          ? text.data
-          : JSON.stringify(error, null, 2)}
-    </p>
-  );
+  return message.success
+    ? message.data.message
+    : text.success
+      ? text.data
+      : JSON.stringify(error, null, 2);
+}
+export function OutputError({ error }: { error: Json }) {
+  return <p role="alert">{outputErrorText(error)}</p>;
 }
 
 /** Shared result presentation for graph cards and the step list. */

@@ -14,6 +14,7 @@ import type {
 } from "../shared/agent-schedules.js";
 import { toolFamilyMethods } from "./tool-family.js";
 import { libraryMethods } from "./library-methods.js";
+import { testMethods } from "./test-methods.js";
 import * as Schema from "effect/Schema";
 import { reviewAnswerSchema } from "@fungi.computer/braid";
 import {
@@ -109,6 +110,7 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
   toolFamily: { name: "flows", list: "listWorkflowTools", call: "runWorkflow" },
   methods: {
     ...libraryMethods,
+    ...testMethods,
     ...toolFamilyMethods,
     listRuns: defineAppMethod({
       description:
@@ -129,6 +131,12 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
         );
         if ("error" in reply) throw new Error("Workflow run list unavailable");
         return reply.runs.map((row) => {
+          if ("draftRevision" in row)
+            return {
+              ...row,
+              title:
+                indexes.drafts.read(row.workflowId)?.definition.title ?? null,
+            };
           const copied = indexes.publications.read(
             `${row.workflowId}:${row.commit}`,
           );
