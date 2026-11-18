@@ -228,6 +228,11 @@
   inset-inline-start: var(--spacing-sm);
   z-index: 4;
 }
+/* Inside a loop the Back bar holds the top left corner; the button moves right. */
+.wf-add-step-inside {
+  inset-inline-start: auto;
+  inset-inline-end: var(--spacing-sm);
+}
 .wf-empty-hint {
   position: absolute;
   inset: 0;

@@ -16,6 +16,14 @@ import {
 } from "react";
 import { WorkflowCanvas, type CanvasPoint } from "./canvas.js";
 import {
+  disconnectStep,
+  enteredView,
+  issuesOfGraph,
+  moveStep,
+  useEnteredGraph,
+  withFrames,
+} from "./entered-graph.js";
+import {
   graphDraft,
   replaceGraphDraft,
   type NodeAddress,
@@ -99,6 +107,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     };
   }, [store]);
   const [selected, setSelected] = useState<NodeAddress | null>(null);
+  const inside = useEnteredGraph();
   const [view, setView] = useState<EditorView>("canvas");
   const [showRun, setShowRun] = useState(false);
   const [search, setSearch] = useState<SearchRequest | null>(null);
@@ -162,9 +171,14 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const fits = useMemo(
     () =>
       search?.from && draft && pinCatalog
-        ? fitsPin(draft, searchCatalog, entries, search.from)
+        ? fitsPin(
+            graphDraft(draft, inside.entered) ?? draft,
+            searchCatalog,
+            entries,
+            search.from,
+          )
         : undefined,
-    [search, draft, pinCatalog, searchCatalog, entries],
+    [search, draft, inside.entered, pinCatalog, searchCatalog, entries],
   );
   const chooseVersion = (value: string) => {
     setAutoRunVersion(null);
@@ -238,6 +252,12 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const catalogUnavailable =
     state.catalogLoading || state.catalogError !== null;
   const issues = catalogUnavailable ? [] : validate(draft.definition, catalog);
+  const scope = enteredView(
+    draft,
+    inside.entered,
+    catalog,
+    document.appDisplay,
+  );
   const update = (next: Draft) => {
     if (!readOnly) state.setDraft(next);
   };
@@ -260,7 +280,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     return { client, flow: flow.screenToFlowPosition(client) };
   };
   const refuse = (from: PortRef, to: PortRef, point: CanvasPoint) => {
-    const scoped = graphDraft(draft, "root");
+    const scoped = graphDraft(draft, scope.graphId);
     if (!scoped) return;
     const result = connect(scoped, catalog, from, to);
     if (result.ok) return;
@@ -308,7 +328,7 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   };
   const addStep = (entry: StepEntry) => {
     if (readOnly || !search) return;
-    const scoped = graphDraft(draft, "root");
+    const scoped = graphDraft(draft, scope.graphId);
     if (!scoped) return;
     const placed = placeStep(scoped, entry, search.point.flow);
     if (!placed.ok) {
@@ -324,12 +344,12 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       });
       if (wired.ok) next = wired.draft;
     }
-    update(replaceGraphDraft(draft, "root", next));
+    update(replaceGraphDraft(draft, scope.graphId, next));
     closeSearch();
-    choose({ graphId: "root", nodeId: placed.node.id });
+    choose({ graphId: scope.graphId, nodeId: placed.node.id });
   };
   const mend = (offer: MismatchOffer) => {
-    update(replaceGraphDraft(draft, "root", offer.draft));
+    update(replaceGraphDraft(draft, scope.graphId, offer.draft));
     setPinIssue(null);
     focusCanvas();
   };
@@ -539,45 +559,46 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           canvas={
             <>
               <WorkflowCanvas
-                key={state.version ?? "draft"}
+                key={`${String(state.version ?? "draft")}:${scope.graphId}`}
                 readOnly={readOnly}
-                draft={draft}
+                graphId={scope.graphId}
+                draft={scope.scoped}
+                frames={draft.frames}
+                onFramesChange={(frames) => {
+                  if (!readOnly)
+                    state.setDraft((current) =>
+                      current ? withFrames(current, frames) : current,
+                    );
+                }}
+                onEnter={inside.enter}
+                onExit={() => {
+                  inside.enter(scope.parent);
+                }}
+                crumb={scope.crumb}
                 catalog={catalog}
                 appDisplay={document.appDisplay}
-                issues={issues}
+                issues={issuesOfGraph(issues, scope.graphId)}
                 selected={selected}
                 onSelect={choose}
                 onMove={(id, position) => {
                   if (readOnly) return;
                   state.setDraft((current) =>
                     current
-                      ? {
-                          ...current,
-                          layout: { ...current.layout, [id]: position },
-                        }
+                      ? moveStep(current, scope.graphId, id, position)
                       : current,
                   );
                 }}
                 onConnect={(from, to) => {
-                  connectPorts("root", from, to);
+                  connectPorts(scope.graphId, from, to);
                 }}
                 onRemove={(nodeId) => {
-                  remove({ graphId: "root", nodeId });
+                  remove({ graphId: scope.graphId, nodeId });
                 }}
                 onDisconnect={(index) => {
                   if (readOnly) return;
-                  const removed = draft.definition.edges[index];
                   state.setDraft((current) =>
                     current
-                      ? {
-                          ...current,
-                          definition: {
-                            ...current.definition,
-                            edges: current.definition.edges.filter(
-                              (edge) => edge !== removed,
-                            ),
-                          },
-                        }
+                      ? disconnectStep(current, scope.graphId, index)
                       : current,
                   );
                 }}
@@ -591,7 +612,11 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
               />
               {readOnly ? null : (
                 <Button
-                  className="wf-add-step"
+                  className={
+                    scope.graphId === "root"
+                      ? "wf-add-step"
+                      : "wf-add-step wf-add-step-inside"
+                  }
                   size="sm"
                   variant="outline"
                   onClick={() => {

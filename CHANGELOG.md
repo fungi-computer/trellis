@@ -1,5 +1,29 @@
 # @fungi.computer/trellis
 
+## 0.19.0
+
+### Minor Changes
+
+- Changes since 0.18.1:
+
+  - fix(trellis): give each frame tone its own hue, and test adding a step
+    inside a loop
+  - fix(trellis): make the frame tint and label read on the light canvas
+  - fix(trellis): opening a loop does not choose its card, so a phone stays on
+    the canvas
+  - fix(trellis): clear the loop Back bar, keep the loop count on one line, show
+    frames in light
+  - fix(trellis): keep frames off the phone column and the Back bar off its
+    first card
+  - fix(trellis): export the frame box type its signatures name
+  - feat(trellis): enter a loop's body and draw comment frames on the canvas
+
+### Patch Changes
+
+- @fungi.computer/shiitake-extensions@0.11.10
+  - @fungi.computer/braid@0.5.4
+  - @fungi.computer/workflows-wire@0.5.4
+
 ## 0.18.1
 
 ### Patch Changes

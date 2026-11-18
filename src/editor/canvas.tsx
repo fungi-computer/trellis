@@ -1,10 +1,19 @@
 import { useCatalogLoading } from "./catalog-loading.js";
 import * as S from "effect/Schema";
+import { GraphResults, nodeResultsFor } from "./graph-results.js";
 import {
-  GraphResults,
-  iterationProgress,
-  nodeResultsFor,
-} from "./graph-results.js";
+  FrameCard,
+  framedSteps,
+  frameAround,
+  frameIdOf,
+  frameNodeId,
+  removeFrame,
+  updateFrame,
+  type Frame,
+  type FrameBox,
+  type FrameCardNode,
+} from "./canvas-frames.js";
+import { LoopBody } from "./loop-node.js";
 import type { ReadMedia } from "../runs/output-preview.js";
 import type { RunStep } from "../runs/run-state.js";
 import {
@@ -25,6 +34,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { Badge } from "@fungi.computer/caps/components/badge";
+import { Button } from "@fungi.computer/caps/components/button";
 import { IconButton } from "@fungi.computer/caps/components/icon-button";
 import { Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { WorkflowMark } from "./mark.js";
@@ -49,7 +59,6 @@ import { connect, nodePorts } from "./graph.js";
 import { handleSides, placeNodes, type Size } from "./canvas-layout.js";
 import { isFlowPin, pinToken, pinWords } from "./pins.js";
 import type { Draft, DraftDocument } from "./draft-store.js";
-import type { Frames } from "@fungi.computer/workflows-wire";
 import type {
   Catalog,
   Issue,
@@ -77,7 +86,7 @@ export type CanvasPoint = {
 /** What a person or an Agent did to a step since the live version. */
 export type NodeMark = "added" | "changed" | "removed";
 /** A comment frame behind a group of steps. It never enters the workflow definition. */
-export type CanvasFrame = Frames[number];
+export type CanvasFrame = Frame;
 
 const markWords = {
   added: "Added",
@@ -104,6 +113,8 @@ const fitPadding = {
   bottom: 0.04,
   left: 0.04,
 } as const;
+/** Where the phone's column starts inside a loop: below the Back bar, which is 16px in and about 52px tall. */
+const crumbClearance = 28;
 const minZoom = 0.25;
 const maxZoom = 1.5;
 /** Below this zoom a whole graph is unreadable, so it opens at its first step instead. */
@@ -128,10 +139,10 @@ type CardData = {
   problem?: ReturnType<typeof nodeProblem>;
   mark?: NodeMark;
   loop?: string;
+  /** Opens the loop's body as its own graph. */
+  enter?: () => void;
 };
 type Card = FlowNode<CardData, "workflow">;
-type FrameData = { label: string; tone: CanvasFrame["tone"] };
-type FrameCardNode = FlowNode<FrameData, "frame">;
 type CanvasNode = Card | FrameCardNode;
 
 function NodeCard({ data, selected, id }: NodeProps<Card>) {
@@ -161,7 +172,6 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
         side === "inputs" ? data.connectedInputs : data.connectedOutputs;
       return !control || connecting || connected.includes(key);
     });
-  const progress = data.loop ? iterationProgress(data.results) : undefined;
   const status = data.problem ? (
     <NodeStatus state="problem" label={data.problem.words} />
   ) : data.state ? (
@@ -214,9 +224,11 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
           )
         : null}
       {data.loop ? (
-        <p className="wf-node-loop" title="Double-click to open">
-          {data.loop}
-        </p>
+        <LoopBody
+          summary={data.loop}
+          results={data.results}
+          onEnter={data.enter}
+        />
       ) : null}
       <div className="wf-ports">
         {(["inputs", "outputs"] as const).map((side) => (
@@ -260,16 +272,7 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
           showIterations={data.results.length > 1}
         />
       )}
-      {status || progress ? (
-        <footer className="wf-node-status">
-          {status}
-          {progress ? (
-            <span className="wf-node-progress">
-              {String(progress.done)} of {String(progress.total)}
-            </span>
-          ) : null}
-        </footer>
-      ) : null}
+      {status ? <footer className="wf-node-status">{status}</footer> : null}
     </Surface>
   );
 }
@@ -313,13 +316,6 @@ function CanvasControls() {
   );
 }
 
-function FrameCard({ data }: NodeProps<FrameCardNode>) {
-  return (
-    <div className="wf-frame" data-tone={data.tone}>
-      <span className="wf-frame-label">{data.label}</span>
-    </div>
-  );
-}
 const nodeTypes = { workflow: NodeCard, frame: FrameCard };
 
 export function WorkflowCanvas({
@@ -344,6 +340,9 @@ export function WorkflowCanvas({
   onPinRelease,
   onPinMismatch,
   onEnter,
+  onExit,
+  crumb,
+  onFramesChange,
 }: {
   readOnly?: boolean;
   /** The graph on show: `root`, or a loop's body once a person can enter it. */
@@ -376,6 +375,15 @@ export function WorkflowCanvas({
   onPinMismatch?: (from: PortRef, to: PortRef, point: CanvasPoint) => void;
   /** A person opened a loop; `body` is the graph id to show next. */
   onEnter?: (body: string) => void;
+  /** Leaves a loop's body for the graph it sits in (the Back button and Escape). */
+  onExit?: () => void;
+  /** The name of the loop this body belongs to, shown beside Back. */
+  crumb?: string;
+  /**
+   * A person drew, labelled, coloured, moved, resized or deleted a frame:
+   * the next `frames` for every graph. Without it frames are read-only.
+   */
+  onFramesChange?: (frames: CanvasFrame[]) => void;
 }) {
   const [edgeSelection, setEdgeSelection] = useState<ReadonlySet<string>>(
     new Set(),
@@ -396,6 +404,7 @@ export function WorkflowCanvas({
   );
   const wrapper = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
+  const [newFrame, setNewFrame] = useState<string | null>(null);
   const initialized = useNodesInitialized();
   const loading = useCatalogLoading();
   const {
@@ -457,7 +466,9 @@ export function WorkflowCanvas({
       nodePorts(draft.definition, catalog, id),
     ]),
   );
-  let narrowTop = 0;
+  // Inside a loop the Back bar sits over the top of the column (16px in, about
+  // 52px tall); start the first card a clear gap below it.
+  let narrowTop = graphId !== "root" && onExit ? crumbClearance : 0;
   const steps: Card[] = [
     {
       id: "$input",
@@ -483,6 +494,10 @@ export function WorkflowCanvas({
       node,
     })),
   ].map((node) => {
+    const loopBody =
+      node.node?.kind === "map" || node.node?.kind === "repeat"
+        ? node.node.body
+        : undefined;
     const top = narrowTop;
     narrowTop += (measurements[node.id]?.height ?? 136) + 24;
     const own = issues.filter(
@@ -533,25 +548,85 @@ export function WorkflowCanvas({
           node.node?.kind === "map" || node.node?.kind === "repeat"
             ? loopSummary(draft.definition, node.node)
             : undefined,
+        enter:
+          onEnter && loopBody !== undefined
+            ? () => {
+                onEnter(loopBody);
+              }
+            : undefined,
       },
     };
   });
-  const frameNodes: FrameCardNode[] = (frames ?? [])
-    .filter((frame) => frame.graph === graphId)
+  const allFrames = frames ?? [];
+  const framing = onFramesChange !== undefined && !readOnly && !narrow;
+  const changeFrames = (next: readonly CanvasFrame[]) => {
+    onFramesChange?.([...next]);
+  };
+  const frameNodes: FrameCardNode[] = allFrames
+    // Frames sit at wide-layout places; the phone stacks cards in one column.
+    .filter((frame) => !narrow && frame.graph === graphId)
     .map((frame) => ({
-      id: `frame:${frame.id}`,
+      id: frameNodeId(frame.id),
       type: "frame",
       position: { x: frame.x, y: frame.y },
       width: frame.width,
       height: frame.height,
-      draggable: false,
-      selectable: false,
-      focusable: false,
+      draggable: framing,
+      selectable: framing,
+      focusable: framing,
       connectable: false,
-      deletable: false,
+      deletable: framing,
+      selected: selection.has(frameNodeId(frame.id)),
       zIndex: -1,
-      data: { label: frame.label, tone: frame.tone },
+      data: {
+        label: frame.label,
+        tone: frame.tone,
+        edit: framing
+          ? {
+              focus: newFrame === frame.id,
+              onLabel: (label) => {
+                changeFrames(updateFrame(allFrames, frame.id, { label }));
+              },
+              onTone: (tone) => {
+                changeFrames(updateFrame(allFrames, frame.id, { tone }));
+              },
+              onRemove: () => {
+                changeFrames(removeFrame(allFrames, frame.id));
+              },
+            }
+          : undefined,
+      },
     }));
+  /** Each step's box in flow units: where it sits and what the card measured. */
+  const stepBoxes: Record<string, FrameBox> = Object.fromEntries(
+    steps.map((step) => [
+      step.id,
+      {
+        x: step.position.x,
+        y: step.position.y,
+        width: measurements[step.id]?.width ?? 260,
+        height: measurements[step.id]?.height ?? 136,
+      },
+    ]),
+  );
+  /** C: a frame around the selected steps, or a blank one at the pointer. */
+  const drawFrame = () => {
+    const chosen = selection.size
+      ? [...selection].filter((id) => frameIdOf(id) === undefined)
+      : selected?.graphId === graphId
+        ? [selected.nodeId]
+        : [];
+    const frame = frameAround(
+      allFrames,
+      graphId,
+      chosen.flatMap((id) => (id in stepBoxes ? [stepBoxes[id]] : [])),
+      screenToFlowPosition(pointer.current ?? centre()),
+    );
+    if (!frame) return;
+    changeFrames([...allFrames, frame]);
+    setNewFrame(frame.id);
+    setSelection(new Set([frameNodeId(frame.id)]));
+  };
   const nodes: CanvasNode[] = [...frameNodes, ...steps];
   const tokenOf = (ref: PortRef, side: "inputs" | "outputs") =>
     pinToken(
@@ -592,11 +667,31 @@ export function WorkflowCanvas({
       className="wf-canvas"
       role="group"
       aria-label="Workflow canvas"
-      tabIndex={onSearch && !readOnly ? 0 : undefined}
+      tabIndex={(onSearch ?? onFramesChange) && !readOnly ? 0 : undefined}
       onPointerMove={(event) => {
         pointer.current = { x: event.clientX, y: event.clientY };
       }}
       onKeyDown={(event) => {
+        const typing =
+          event.target instanceof Element &&
+          event.target.closest("input, textarea, select, [contenteditable]");
+        if (typing) return;
+        // C draws a frame, as in Unreal's blueprint editor; Escape leaves a loop's body.
+        if (
+          event.key.toLowerCase() === "c" &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          framing
+        ) {
+          event.preventDefault();
+          drawFrame();
+          return;
+        }
+        if (event.key === "Escape" && graphId !== "root" && onExit) {
+          onExit();
+          return;
+        }
         // Tab on the canvas itself (or a step) opens search; elsewhere it moves focus on.
         if (event.key !== "Tab" || event.shiftKey || !onSearch || readOnly)
           return;
@@ -640,7 +735,8 @@ export function WorkflowCanvas({
         }}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
-          onSelect({ graphId, nodeId: node.id });
+          if (frameIdOf(node.id) === undefined)
+            onSelect({ graphId, nodeId: node.id });
         }}
         onNodeDoubleClick={(_, node) => {
           const step = draft.definition.nodes.find(
@@ -659,7 +755,49 @@ export function WorkflowCanvas({
           search({ x: event.clientX, y: event.clientY });
         }}
         onNodesChange={(changes) => {
+          let nextFrames = allFrames;
+          const moved = new Set(
+            changes.flatMap((change) =>
+              change.type === "position" ? [change.id] : [],
+            ),
+          );
           for (const change of changes) {
+            const frameId = "id" in change ? frameIdOf(change.id) : undefined;
+            if (frameId !== undefined) {
+              const frame = nextFrames.find((item) => item.id === frameId);
+              if (!frame) continue;
+              if (change.type === "position" && change.position) {
+                // The steps inside a frame travel with it.
+                const dx = change.position.x - frame.x;
+                const dy = change.position.y - frame.y;
+                for (const id of framedSteps(frame, stepBoxes))
+                  if (!moved.has(id))
+                    onMove(id, {
+                      x: stepBoxes[id].x + dx,
+                      y: stepBoxes[id].y + dy,
+                    });
+                nextFrames = updateFrame(nextFrames, frameId, change.position);
+              } else if (
+                change.type === "dimensions" &&
+                change.setAttributes &&
+                change.dimensions
+              )
+                nextFrames = updateFrame(
+                  nextFrames,
+                  frameId,
+                  change.dimensions,
+                );
+              else if (change.type === "remove")
+                nextFrames = removeFrame(nextFrames, frameId);
+              else if (change.type === "select")
+                setSelection((current) => {
+                  const next = new Set(current);
+                  if (change.selected) next.add(change.id);
+                  else next.delete(change.id);
+                  return next;
+                });
+              continue;
+            }
             if (change.type === "dimensions" && change.dimensions) {
               const dimensions = change.dimensions;
               setMeasurements((current) =>
@@ -682,6 +820,7 @@ export function WorkflowCanvas({
               if (change.selected) onSelect({ graphId, nodeId: change.id });
             }
           }
+          if (nextFrames !== allFrames) changeFrames(nextFrames);
         }}
         onEdgesDelete={(deleted) => {
           for (const edge of deleted)
@@ -724,6 +863,14 @@ export function WorkflowCanvas({
       >
         <Background gap={24} size={1} />
         <CanvasControls />
+        {graphId !== "root" && onExit ? (
+          <Panel position="top-left" className="wf-crumb">
+            <Button size="xs" variant="ghost" onClick={onExit}>
+              Back
+            </Button>
+            {crumb ? <span className="wf-crumb-title">{crumb}</span> : null}
+          </Panel>
+        ) : null}
         {narrow ? null : (
           <MiniMap
             pannable

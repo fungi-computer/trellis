@@ -151,34 +151,39 @@
 }
 
 /* Comment frames sit behind the steps they group. */
+/* Tones are fixed hues, mid-light, so each reads on both themes and differs from the rest. */
 .wf-frame {
   --wf-tone: var(--color-base-content);
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  border: 1px solid color-mix(in oklab, var(--wf-tone) 35%, transparent);
+  border: 1px solid color-mix(in oklab, var(--wf-tone) 50%, transparent);
   border-radius: var(--radius-box, 0.5rem);
-  background: color-mix(in oklab, var(--wf-tone) 8%, transparent);
+  background: color-mix(in oklab, var(--wf-tone) 20%, transparent);
 }
 .wf-frame[data-tone="teal"] {
-  --wf-tone: color-mix(in oklab, var(--color-success) 55%, var(--color-info));
+  --wf-tone: oklch(0.66 0.1 195);
 }
 .wf-frame[data-tone="mauve"] {
-  --wf-tone: var(--color-secondary);
+  --wf-tone: oklch(0.62 0.17 305);
 }
 .wf-frame[data-tone="peach"] {
-  --wf-tone: var(--color-warning);
+  --wf-tone: oklch(0.72 0.14 55);
 }
 .wf-frame[data-tone="sky"] {
-  --wf-tone: var(--color-info);
+  --wf-tone: oklch(0.66 0.13 240);
 }
 .wf-frame[data-tone="green"] {
-  --wf-tone: var(--color-success);
+  --wf-tone: oklch(0.68 0.15 145);
 }
 .wf-frame-label {
   display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  background: transparent;
   padding: var(--spacing-xs) var(--spacing-sm);
-  color: color-mix(in oklab, var(--wf-tone) 70%, var(--color-base-content));
+  color: color-mix(in oklab, var(--wf-tone) 45%, var(--color-base-content));
   font-family: var(--font-sans);
   font-size: max(12px, var(--text-xs));
   font-weight: 600;
@@ -205,4 +210,118 @@
 }
 .wf-canvas .wf-minimap-frame {
   fill: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+
+/* A frame's label is typed in place; its colours and delete show once chosen. */
+input.wf-frame-label {
+  outline: none;
+}
+input.wf-frame-label::placeholder {
+  color: color-mix(in oklab, var(--wf-tone) 45%, transparent);
+}
+input.wf-frame-label:focus-visible {
+  box-shadow: inset 0 -2px 0 var(--wf-tone);
+}
+.wf-frame-tools {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  border: 1px solid var(--wf-line);
+  border-radius: var(--radius-box, 0.5rem);
+  background: var(--color-base-100);
+}
+.wf-frame-tone {
+  --wf-tone: var(--color-base-content);
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--wf-tone);
+  cursor: pointer;
+}
+.wf-frame-tone[data-tone="teal"] {
+  --wf-tone: oklch(0.66 0.1 195);
+}
+.wf-frame-tone[data-tone="mauve"] {
+  --wf-tone: oklch(0.62 0.17 305);
+}
+.wf-frame-tone[data-tone="peach"] {
+  --wf-tone: oklch(0.72 0.14 55);
+}
+.wf-frame-tone[data-tone="sky"] {
+  --wf-tone: oklch(0.66 0.13 240);
+}
+.wf-frame-tone[data-tone="green"] {
+  --wf-tone: oklch(0.68 0.15 145);
+}
+.wf-frame-tone[aria-pressed="true"] {
+  border-color: var(--color-base-100);
+  outline: 2px solid var(--color-base-content);
+}
+.wf-frame-tone:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.wf-canvas .wf-frame-edge {
+  border-color: var(--color-primary);
+}
+.wf-canvas .wf-frame-handle {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--color-primary);
+  border-radius: 2px;
+  background: var(--color-base-100);
+}
+
+/* A loop card: its summary, how far a run got, and the way in. */
+.wf-loop {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding-right: var(--spacing-xs);
+}
+.wf-loop .wf-node-loop {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-node-progress {
+  flex: none;
+  white-space: nowrap;
+  margin: 0;
+  color: var(--wf-muted);
+  font-family: var(--font-sans);
+  font-size: max(12px, var(--text-xs));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Where you are, inside a loop's body. */
+.wf-canvas .wf-crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  border: 1px solid var(--wf-line);
+  border-radius: var(--radius-box, 0.5rem);
+  background: var(--color-base-100);
+}
+.wf-crumb > button {
+  flex: none;
+}
+.wf-crumb-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: max(12px, var(--text-xs));
+  font-weight: 600;
 }
