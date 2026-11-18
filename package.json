@@ -1,6 +1,6 @@
 {
   "name": "@fungi.computer/trellis",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "scripts": {
     "build": "vite build && tsc -p backend/tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit",
@@ -20,7 +20,7 @@
     "@fungi.computer/sigils": "0.3.2",
     "@fungi.computer/stipe": "0.1.1",
     "@fungi.computer/watchdog": "0.1.4",
-    "@fungi.computer/workflows-wire": "0.6.0",
+    "@fungi.computer/workflows-wire": "0.7.0",
     "@xyflow/react": "12.12.0",
     "cronstrue": "3.38.0",
     "effect": "4.0.2",
@@ -125,6 +125,7 @@
           {
             "name": "AGENTS",
             "operations": [
+              "list",
               "schedules",
               "pauseSchedule",
               "resumeSchedule",

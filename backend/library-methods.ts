@@ -4,10 +4,12 @@ import * as z from "zod";
 import * as S from "effect/Schema";
 import { defineAppMethod } from "@fungi.computer/agar/backend-definition";
 import { gitSha1Schema } from "@fungi.computer/puffball/git-representation";
+import type { HostActor } from "@fungi.computer/puffball/app-method-runtime";
 import {
   publishedRun,
   runReply,
   documentRead,
+  draftHeadRead,
   versionsRead,
   rebuildCopiesInput,
   rebuildCopiesReply,
@@ -37,20 +39,22 @@ async function catalog(
   return available;
 }
 
-function library(context: WorkflowMethodContext) {
+/** `actor` names who a write is recorded as; reads need none. */
+function library(context: WorkflowMethodContext, actor?: HostActor) {
   const options: Parameters<typeof createWorkflowLibrary>[0] = {
     author: { name: "Trellis", email: "trellis@app.local" },
     catalog: (appIds) => catalog(context, appIds),
   };
+  if (actor) options.actor = actor;
   if (context.env.GIT) options.git = context.env.GIT;
   if (context.env.BACKGROUND) options.background = context.env.BACKGROUND;
   if (context.indexes) options.index = context.indexes;
   return createWorkflowLibrary(options);
 }
 /** The single published-copy owner used by portable sharing and local forks. */
-export function sharing(context: WorkflowMethodContext) {
+export function sharing(context: WorkflowMethodContext, actor?: HostActor) {
   return createWorkflowShare({
-    library: library(context),
+    library: library(context, actor),
     catalog: (appIds) => catalog(context, appIds),
   });
 }
@@ -80,8 +84,8 @@ export const libraryMethods = {
       workflowId: workflowIdSchema,
     }),
     output: shareCopyReply,
-    handler: (input, context: WorkflowMethodContext) =>
-      sharing(context).importWorkflow(input),
+    handler: (input, context: WorkflowMethodContext, caller) =>
+      sharing(context, caller.actor).importWorkflow(input),
   }),
   forkWorkflow: defineAppMethod({
     description:
@@ -94,8 +98,8 @@ export const libraryMethods = {
       workflowId: workflowIdSchema,
     }),
     output: shareCopyReply,
-    handler: (input, context: WorkflowMethodContext) =>
-      sharing(context).forkPublishedWorkflow({
+    handler: (input, context: WorkflowMethodContext, caller) =>
+      sharing(context, caller.actor).forkPublishedWorkflow({
         sourceWorkflowId: input.sourceWorkflowId,
         at: { version: input.version },
         workflowId: input.workflowId,
@@ -151,6 +155,16 @@ export const libraryMethods = {
         await library(context).read(input.workflowId, input.at),
       ),
   }),
+  draftHead: defineAppMethod({
+    description:
+      "Read a draft's revision, who saved it since the live version (newest first) and the live version number, so a change by an Agent shows before it is published.",
+    effect: "read",
+    requires: ["git.repository"],
+    input: workflow,
+    output: draftHeadRead,
+    handler: (input, context: WorkflowMethodContext) =>
+      draftHeadRead.parse(library(context).draftHead(input.workflowId)),
+  }),
   saveDraft: defineAppMethod({
     description:
       "Validate and save a Workflow draft using its expected row revision.",
@@ -161,9 +175,9 @@ export const libraryMethods = {
       expectedRevision: revisionSchema,
     }),
     output: saveReply,
-    handler: async (input, context: WorkflowMethodContext) =>
+    handler: async (input, context: WorkflowMethodContext, caller) =>
       saveReply.parse(
-        await library(context).saveDraft(
+        await library(context, caller.actor).saveDraft(
           input.workflowId,
           input.draft,
           input.expectedRevision,
@@ -179,7 +193,7 @@ export const libraryMethods = {
     output: publishReply,
     handler: async (input, context: WorkflowMethodContext, caller) =>
       publishReply.parse(
-        await library(context).publish(
+        await library(context, caller.actor).publish(
           input.workflowId,
           input.expectedRevision,
           caller,
@@ -202,7 +216,7 @@ export const libraryMethods = {
     input: z.strictObject({}),
     output: z.strictObject({ more: z.boolean() }),
     handler: (_input, context: WorkflowMethodContext, caller) =>
-      library(context).continuePublication(caller),
+      library(context, caller.actor).continuePublication(caller),
   }),
   publicationStatus: defineAppMethod({
     description: "Read publication progress without accessing Git.",
@@ -246,9 +260,9 @@ export const libraryMethods = {
       expectedRevision: revisionSchema,
     }),
     output: saveReply,
-    handler: async (input, context: WorkflowMethodContext) =>
+    handler: async (input, context: WorkflowMethodContext, caller) =>
       saveReply.parse(
-        await library(context).revert(
+        await library(context, caller.actor).revert(
           input.workflowId,
           input.toCommit,
           input.expectedRevision,

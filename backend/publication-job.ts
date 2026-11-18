@@ -34,7 +34,10 @@ import {
   backgroundSyncRefusalSchema,
   type BackgroundSyncRefusal,
 } from "@fungi.computer/puffball/background-replay";
-import type { AppMethodCallContext } from "@fungi.computer/puffball/app-method-runtime";
+import type {
+  AppMethodCallContext,
+  HostActor,
+} from "@fungi.computer/puffball/app-method-runtime";
 import { sha256DigestSchema } from "@fungi.computer/puffball/effect";
 import {
   draftDocument,
@@ -47,7 +50,7 @@ import {
   publishReply,
   workflowIdSchema,
 } from "@fungi.computer/workflows-wire";
-import type { WorkflowStorage } from "./indexes.js";
+import type { Publisher, WorkflowStorage } from "./indexes.js";
 import { versionRefs } from "@fungi.computer/workflows-wire";
 import { serializedDraft, retainedDraft } from "./library.js";
 import { definitionAppIds } from "./catalog.js";
@@ -68,6 +71,7 @@ export type PublicationStore = Readonly<{
     publication: StoredPublication,
     epoch: number,
     refs: Awaited<ReturnType<GitBinding["refs"]>>,
+    publisher: Publisher,
   ) => void;
 }>;
 const cargo = z.strictObject({
@@ -202,7 +206,11 @@ export function createPublicationJobs(
     }
   }
   const frameClosed = (signal: AbortSignal) => signal.aborted;
-  async function runtime(lane: string, ports?: PublicationPorts) {
+  async function runtime(
+    lane: string,
+    ports?: PublicationPorts,
+    actor?: HostActor,
+  ) {
     const progress = new Map<string, Progress>();
     const terminal = new Set<string>();
     const claimed = new Set<string>();
@@ -434,6 +442,7 @@ export function createPublicationJobs(
           if (revision !== row.revision)
             throw new Error("StoredPublication revision mismatch");
           if (!next.refs) throw new Error("Confirmed publication refs missing");
+          if (!actor) throw new Error("StoredPublication publisher missing");
           store.publish(
             publishedDocument.parse({
               ...draft,
@@ -444,6 +453,7 @@ export function createPublicationJobs(
             }),
             row.epoch,
             next.refs,
+            { actor, revision: row.revision },
           );
           sql.exec(
             "UPDATE workflow_publication_jobs SET status = 'published', commit_oid = ?, version = ?, body = NULL WHERE id = ?",
@@ -579,7 +589,11 @@ export function createPublicationJobs(
               )
               .toArray().length !== 0,
         };
-      const { runner, cleanup, release } = await runtime(lane, ports);
+      const { runner, cleanup, release } = await runtime(
+        lane,
+        ports,
+        caller.actor,
+      );
       try {
         await runner.tickConcurrent();
       } finally {

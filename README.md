@@ -138,6 +138,7 @@ Agents call Trellis through Oyster's MCP endpoint, or at
 | `catalog`                                            | Lists your installed Apps' methods, or one App's full port types.                   |
 | `listWorkflows` / `loadWorkflow`                     | Lists the library, or reads one workflow.                                           |
 | `saveDraft`                                          | Saves a draft, with a revision check so concurrent edits never clobber each other.  |
+| `draftHead`                                          | Reads a draft's revision, who saved it since the live version, and the live one.    |
 | `publishWorkflow` / `listVersions` / `revertDraft`   | Publishes a version, lists versions, or restores one as a draft.                    |
 | `runWorkflow`                                        | Runs a published version, optionally reporting the ending to a chat.                |
 | `testDraft`                                          | Runs the saved draft as a Test, or one step and its ancestors. Needs `allowWrites`. |
@@ -146,6 +147,12 @@ Agents call Trellis through Oyster's MCP endpoint, or at
 | `exportWorkflow` / `importWorkflow` / `forkWorkflow` | Moves workflows in and out as JSON, or copies one.                                  |
 
 `answerReview` exists too, but only a person can answer a review.
+
+Every draft save, revert, import and fork records who made it (a member, an
+Agent or a Team key), and so does every publication. `draftHead` returns the
+saves since the live version, newest first, and that list empties when a version
+is published. A draft saved before this was recorded shows no one: nobody was
+recorded. The Git author stays the Trellis App identity.
 
 ### Build and check
 

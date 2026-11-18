@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { workflowDefinitionSchema } from "@fungi.computer/braid";
 import { createReadCopies } from "@fungi.computer/agar/read-copy";
 import { gitSha1Schema } from "@fungi.computer/puffball/git-representation";
+import type { HostActor } from "@fungi.computer/puffball/app-method-runtime";
 import { createPublicationJobs } from "./publication-job.js";
 import { versionRefs } from "@fungi.computer/workflows-wire";
 import type { GitBinding } from "@fungi.computer/agar/git";
@@ -13,6 +14,7 @@ import {
   draftDocument,
   version,
   listings,
+  draftHeadRead,
 } from "@fungi.computer/workflows-wire";
 
 /** The facet SQL boundary; rows are decoded rather than asserted into domain types. */
@@ -46,6 +48,25 @@ const copiedDocument = document.transform((raw) => ({
   ),
 }));
 
+/** The draft revision a publication carried, and who published it. */
+export type Publisher = Readonly<{ actor: HostActor; revision: number }>;
+const actorColumns = (actor: HostActor) =>
+  actor.kind === "member"
+    ? (["member", actor.memberId] as const)
+    : actor.kind === "agent"
+      ? (["agent", actor.agentId] as const)
+      : (["team-key", actor.keyId] as const);
+const changeRow = z.strictObject({
+  revision: z.number().int().positive(),
+  actor_kind: z.enum(["member", "agent", "team-key"]),
+  actor_id: z.string(),
+  saved_at: z.number().int().nonnegative(),
+});
+const publishedRevisionRow = z.strictObject({
+  revision: z.number().int().positive(),
+});
+const draftChangeLimit = 100;
+
 const librarySnapshotSchema = z.strictObject({
   refs: z.record(z.string(), gitSha1Schema),
   items: listings,
@@ -61,6 +82,30 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
   sql.exec(
     "CREATE TABLE IF NOT EXISTS workflow_drafts (workflow_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, body TEXT NOT NULL, updated_at INTEGER NOT NULL)",
   );
+  // Additive facet tables: a facet that predates them boots with no rows, so an
+  // existing draft shows no attribution until its next save records an actor.
+  sql.exec(
+    "CREATE TABLE IF NOT EXISTS workflow_draft_changes (workflow_id TEXT NOT NULL, revision INTEGER NOT NULL, actor_kind TEXT NOT NULL, actor_id TEXT NOT NULL, saved_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, revision))",
+  );
+  sql.exec(
+    "CREATE TABLE IF NOT EXISTS workflow_publishers (workflow_id TEXT NOT NULL, version INTEGER NOT NULL, revision INTEGER NOT NULL, actor_kind TEXT NOT NULL, actor_id TEXT NOT NULL, published_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, version))",
+  );
+  function recordPublisher(
+    workflowId: string,
+    version: number,
+    publisher: Publisher,
+  ) {
+    const [kind, id] = actorColumns(publisher.actor);
+    sql.exec(
+      "INSERT OR REPLACE INTO workflow_publishers (workflow_id, version, revision, actor_kind, actor_id, published_at) VALUES (?, ?, ?, ?, ?, ?)",
+      workflowId,
+      version,
+      publisher.revision,
+      kind,
+      id,
+      Date.now(),
+    );
+  }
   const draftRow = z.strictObject({
     revision: z.number().int().positive(),
     body: z.string(),
@@ -177,6 +222,7 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
         workflowId: string,
         body: Omit<z.output<typeof draftDocument>, "revision">,
         expectedRevision: number,
+        actor: HostActor,
       ) {
         workflowIdSchema.parse(workflowId);
         return storage.transactionSync(() => {
@@ -191,6 +237,15 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
             workflowId,
             savedRevision,
             JSON.stringify(content),
+            Date.now(),
+          );
+          const [kind, id] = actorColumns(actor);
+          sql.exec(
+            "INSERT INTO workflow_draft_changes (workflow_id, revision, actor_kind, actor_id, saved_at) VALUES (?, ?, ?, ?, ?)",
+            workflowId,
+            savedRevision,
+            kind,
+            id,
             Date.now(),
           );
           const currentLibrary = librarySnapshot();
@@ -223,6 +278,51 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
         });
       },
     },
+    /** Saves since the newest publication's draft revision, newest first. */
+    draftHead(workflowId: string): z.output<typeof draftHeadRead> {
+      workflowIdSchema.parse(workflowId);
+      const current = readDraft(workflowId);
+      if (current === null) return null;
+      const published = sql
+        .exec(
+          "SELECT revision FROM workflow_publishers WHERE workflow_id = ? ORDER BY version DESC LIMIT 1",
+          workflowId,
+        )
+        .toArray()[0];
+      const since =
+        published === undefined
+          ? 0
+          : publishedRevisionRow.parse(published).revision;
+      const changedSince = sql
+        .exec(
+          "SELECT revision, actor_kind, actor_id, saved_at FROM workflow_draft_changes WHERE workflow_id = ? AND revision > ? ORDER BY revision DESC LIMIT ?",
+          workflowId,
+          since,
+          draftChangeLimit,
+        )
+        .toArray()
+        .map((raw) => {
+          const row = changeRow.parse(raw);
+          return {
+            actor:
+              row.actor_kind === "member"
+                ? { kind: "member" as const, memberId: row.actor_id }
+                : row.actor_kind === "agent"
+                  ? { kind: "agent" as const, agentId: row.actor_id }
+                  : { kind: "team-key" as const },
+            revision: row.revision,
+            at: row.saved_at,
+          };
+        });
+      const live = librarySnapshot().snapshot?.items.find(
+        (item) => item.workflowId === workflowId,
+      )?.published;
+      return {
+        revision: current.revision,
+        changedSince,
+        liveVersion: live?.version ?? null,
+      };
+    },
     libraryList: () => library.read("all"),
     documents,
     versionCopies,
@@ -230,9 +330,11 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
     recordPublication(
       value: Parameters<typeof publications.write>[2],
       epoch: number,
+      publisher: Publisher,
     ) {
       storage.transactionSync(() => {
         const { workflowId, version: number, commit } = value;
+        recordPublisher(workflowId, number, publisher);
         const saved: Pick<
           typeof value,
           "definition" | "layout" | "frames" | "commit" | "provenance"
@@ -277,9 +379,11 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
       value: Parameters<typeof publications.write>[2],
       epoch: number,
       references: Awaited<ReturnType<GitBinding["refs"]>>,
+      publisher: Publisher,
     ) {
       storage.transactionSync(() => {
         const { workflowId, version: number, commit } = value;
+        recordPublisher(workflowId, number, publisher);
         const saved: Pick<
           typeof value,
           "definition" | "layout" | "frames" | "commit" | "provenance"
@@ -399,7 +503,7 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
       return draft === null ? null : draftDocument.parse(draft);
     },
     revision: () => librarySnapshot().revision,
-    publish: (value, epoch, refs) => {
+    publish: (value, epoch, refs, publisher) => {
       indexes.recordBackgroundPublication(
         {
           ...value,
@@ -409,6 +513,7 @@ export function createWorkflowIndexes(storage: WorkflowStorage) {
         },
         epoch,
         refs,
+        publisher,
       );
     },
   });

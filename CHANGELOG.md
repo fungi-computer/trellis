@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.22.0
+
+### Minor Changes
+
+- Changes since 0.21.0:
+
+  - feat(trellis): record who changed and published each draft
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/workflows-wire@0.7.0
+
 ## 0.21.0
 
 ### Minor Changes

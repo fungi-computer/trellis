@@ -7,7 +7,10 @@ import {
   mayEnqueueBackground,
   type BackgroundBinding,
 } from "@fungi.computer/puffball/background-replay";
-import type { AppMethodCallContext } from "@fungi.computer/puffball/app-method-runtime";
+import type {
+  AppMethodCallContext,
+  HostActor,
+} from "@fungi.computer/puffball/app-method-runtime";
 import {
   commitFiles,
   moveRefs,
@@ -66,9 +69,12 @@ export function createWorkflowLibrary({
   catalog,
   background,
   index,
+  actor,
 }: {
   git?: GitBinding;
   author: GitIdentity;
+  /** Who the draft saves and publications this library makes are recorded as. */
+  actor?: HostActor;
   catalog: (appIds: readonly string[]) => Promise<Catalog>;
   background?: BackgroundBinding;
   index?: Pick<
@@ -76,6 +82,7 @@ export function createWorkflowLibrary({
     | "recordPublication"
     | "publications"
     | "drafts"
+    | "draftHead"
     | "librarySnapshot"
     | "recordLibrary"
     | "invalidateLibrary"
@@ -89,6 +96,10 @@ export function createWorkflowLibrary({
   function requireGit() {
     if (!gitAccess) throw new Error("Git access is not granted");
     return gitAccess;
+  }
+  function requireActor() {
+    if (!actor) throw new Error("Draft authorship needs an actor");
+    return actor;
   }
   async function refs() {
     return (await requireGit().info(repository))
@@ -161,7 +172,12 @@ export function createWorkflowLibrary({
     if (issues.length) return { kind: "invalid" as const, issues };
     if (!index) throw new Error("Workflow row storage unavailable");
     const body = draftDocument.omit({ revision: true }).parse(draft);
-    return index.drafts.save(workflowId, body, expectedRevision);
+    return index.drafts.save(
+      workflowId,
+      body,
+      expectedRevision,
+      requireActor(),
+    );
   }
   function versions(workflowId: string) {
     workflowIdSchema.parse(workflowId);
@@ -192,6 +208,7 @@ export function createWorkflowLibrary({
     caller?: AppMethodCallContext,
   ) {
     if (!index) throw new Error("Workflow row storage unavailable");
+    const publisher = requireActor();
     const draft = index.drafts.read(workflowId);
     if (draft?.revision !== expectedRevision)
       return { kind: "conflict" as const, head: null };
@@ -285,7 +302,10 @@ export function createWorkflowLibrary({
         await contentDigest(S.decodeUnknownSync(S.Json)(draft.definition)),
       ),
     };
-    index.recordPublication(publication, snapshot.revision);
+    index.recordPublication(publication, snapshot.revision, {
+      actor: publisher,
+      revision: draft.revision,
+    });
     return { kind: "published" as const, commit: result.commit, version };
   }
   async function rebuildCopies(
@@ -568,10 +588,15 @@ export function createWorkflowLibrary({
       return null;
     return row.value;
   }
+  function draftHead(workflowId: string) {
+    if (!index) throw new Error("Workflow row storage unavailable");
+    return index.draftHead(workflowId);
+  }
   return {
     publishedRow,
     read,
     saveDraft,
+    draftHead,
     publish,
     versions,
     list,
