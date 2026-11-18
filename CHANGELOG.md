@@ -1,5 +1,17 @@
 # @fungi.computer/trellis
 
+## 0.23.0
+
+### Minor Changes
+
+- Changes since 0.22.0:
+
+  - fix(trellis): keep the armable filter private to the switch
+  - fix(trellis): list only schedules that are on, say off when turning off
+    fails
+  - fix(trellis): give the On switch card Caps spacing, type and a mixed state
+  - feat(trellis): one On switch and a Triggers tab for a workflow
+
 ## 0.22.0
 
 ### Minor Changes

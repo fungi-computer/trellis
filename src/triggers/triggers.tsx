@@ -1,8 +1,19 @@
 import { eventLabel } from "./event-label.js";
-import { scheduleSummary } from "./schedule.js";
+import { nextRuns, runWords, scheduleSummary } from "./schedule.js";
+import {
+  failureWords,
+  switchLabel,
+  switchOff,
+  switchOn,
+  switchState,
+  switchStatus,
+  triggerName,
+  type SwitchFailure,
+  type Trigger,
+} from "./workflow-switch.js";
+import { TriggerSettings } from "./trigger-settings.js";
 import { useEffect, useRef, useState } from "react";
 import { DataList, DataRow } from "@fungi.computer/caps/components/data-list";
-import { Button } from "@fungi.computer/caps/components/button";
 import { Surface } from "@fungi.computer/caps/components/surface";
 import { Field, FieldSet } from "@fungi.computer/caps/components/field";
 import { Select } from "@fungi.computer/caps/components/select";
@@ -18,16 +29,18 @@ import type {
 } from "@fungi.computer/workflows-wire";
 import { chatKey } from "../runs/run-workflow.js";
 import type { WorkflowDefinition } from "@fungi.computer/braid";
+import { useChrome } from "../chrome.js";
+import type { DraftStore } from "../editor/draft-store.js";
 
 /** Presentation port for the selected Workflow's currently declared triggers. */
+export type TriggerRow = {
+  triggerId: string;
+  state: "active" | "paused" | "cancelled" | "finished";
+  lastError: string | null;
+};
+
 export type TriggerControl = {
-  list(): Promise<
-    readonly {
-      triggerId: string;
-      state: "active" | "paused" | "cancelled" | "finished";
-      lastError: string | null;
-    }[]
-  >;
+  list(): Promise<readonly TriggerRow[]>;
   arm(
     triggerId: string,
     bindings: WorkflowTriggerTarget["bindings"],
@@ -135,16 +148,23 @@ export function createTriggerControl(
   };
 }
 
+/** The one On switch for a workflow, what starts it, and the draft's triggers to change. */
 export function Triggers({
   client,
   workflowId,
   control,
-  onOpenEditor,
+  store,
+  onOpenCanvas,
+  onChanged,
 }: {
   client: WorkflowClient;
   workflowId: string | null;
   control?: TriggerControl;
-  onOpenEditor?: () => void;
+  /** The workflow's draft store: with it, triggers can be added and changed here. */
+  store?: DraftStore | null;
+  onOpenCanvas?: () => void;
+  /** The draft or its published versions changed from this tab. */
+  onChanged?: () => void;
 }) {
   const [loadedControl, setLoadedControl] = useState<TriggerControl | null>(
     null,
@@ -156,6 +176,8 @@ export function Triggers({
   const [armed, setArmed] = useState<
     Awaited<ReturnType<TriggerControl["list"]>>
   >([]);
+  const [failures, setFailures] = useState<readonly SwitchFailure[]>([]);
+  const [failedVerb, setFailedVerb] = useState<"on" | "off">("on");
   const [apps, setApps] = useState<
     Awaited<ReturnType<WorkflowClient["catalog"]>>["apps"]
   >([]);
@@ -165,7 +187,9 @@ export function Triggers({
   >([]);
   const [chatsUnavailable, setChatsUnavailable] = useState(false);
   const [reportTo, setReportTo] = useState("");
-  const [pending, setPending] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [ahead, setAhead] = useState(false);
+  const [now, setNow] = useState(Date.now);
   const generation = useRef(0);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -174,14 +198,16 @@ export function Triggers({
     setDefinition(null);
     setLoadedControl(null);
     setError(null);
+    setFailures([]);
     setUnpublished(false);
     setArmed([]);
-    setPending(null);
+    setPending(false);
     setApps([]);
     setAppBindings({});
     setChats([]);
     setChatsUnavailable(false);
     setReportTo("");
+    setNow(Date.now());
     if (workflowId)
       void client
         .listVersions(workflowId)
@@ -246,48 +272,102 @@ export function Triggers({
       generation.current++;
     };
   }, [client, workflowId, control, attempt]);
-  /** Arm with the chosen chat, or with none when "Don't report" is chosen. */
-  function armWith(id: string) {
-    if (!triggerControl) throw new Error("Triggers are not loaded");
-    const chat = chats.find((item) => chatKey(item) === reportTo);
-    return chat === undefined
-      ? triggerControl.arm(id, appBindings)
-      : triggerControl.arm(id, appBindings, {
-          agentId: chat.agentId,
-          sessionId: chat.sessionId,
-        });
-  }
-  async function toggle(id: string, isArmed: boolean) {
-    if (!triggerControl || pending) return;
+  const triggers = definition?.triggers ?? [];
+  const state = switchState(triggers, armed);
+  const status = definition ? switchStatus(triggers, armed, now) : undefined;
+  useChrome(
+    "triggers",
+    status === undefined
+      ? null
+      : {
+          status: [
+            {
+              id: "switch",
+              label: status,
+              tone: state.kind === "on" ? "success" : "neutral",
+            },
+          ],
+        },
+  );
+  /** Turn every trigger on or off, then read the real state back. */
+  async function setOn(on: boolean) {
+    if (!triggerControl || !definition || pending) return;
     const current = generation.current;
-    setPending(id);
+    const chat = chats.find((item) => chatKey(item) === reportTo);
+    const delivery =
+      chat === undefined
+        ? undefined
+        : { agentId: chat.agentId, sessionId: chat.sessionId };
+    setPending(true);
     setError(null);
+    setFailures([]);
     try {
-      const result = isArmed
-        ? await triggerControl.disarm(id)
-        : await armWith(id);
-      if (current !== generation.current) return;
-      if (result.kind === "refused") {
-        setError(result.reason);
-        return;
-      }
+      const missed = on
+        ? await switchOn(triggerControl, triggers, armed, appBindings, delivery)
+        : await switchOff(triggerControl, triggers, armed);
       const rows = await triggerControl.list();
-      if (current === generation.current) setArmed(rows);
+      if (current !== generation.current) return;
+      setArmed(rows);
+      setFailures(missed);
+      setFailedVerb(on ? "on" : "off");
+      setNow(Date.now());
     } catch {
       if (current === generation.current)
         setError(
           "Trigger could not be updated. Retry to read its current state.",
         );
     } finally {
-      if (current === generation.current) setPending(null);
+      if (current === generation.current) setPending(false);
     }
   }
   const bindingsByAlias = new Map(Object.entries(appBindings));
   const missingBinding = definition
     ? Object.keys(definition.apps).some((alias) => !bindingsByAlias.get(alias))
     : false;
+  const appName = (trigger: Trigger & { on: "event" }) =>
+    apps.find(
+      (app) =>
+        app.appId ===
+        new Map(Object.entries(definition?.apps ?? {})).get(trigger.app)?.appId,
+    )?.displayName ?? trigger.app;
+  // Only schedules that are on will fire; with none on, show what would run.
+  const onIds = new Set(
+    armed.filter((row) => row.state === "active").map((row) => row.triggerId),
+  );
+  const anyOn = triggers.some(
+    (trigger) => trigger.on === "schedule" && onIds.has(trigger.id),
+  );
+  const upcoming = triggers
+    .flatMap((trigger) =>
+      trigger.on === "schedule" && (!anyOn || onIds.has(trigger.id))
+        ? nextRuns(trigger.cron, 3, now).map((at) => ({ at, trigger }))
+        : [],
+    )
+    .sort((a, b) => a.at - b.at)
+    .slice(0, 3);
+  const settings = store ? (
+    <TriggerSettings
+      store={store}
+      published={definition ? triggers : null}
+      onAhead={setAhead}
+      onChanged={() => {
+        onChanged?.();
+      }}
+      onPublished={() => {
+        onChanged?.();
+        setAttempt((value) => value + 1);
+      }}
+    />
+  ) : null;
+  const switchDisabled =
+    !triggerControl ||
+    missingBinding ||
+    error !== null ||
+    pending ||
+    ahead ||
+    state.kind === "unavailable";
   return (
-    <main className="wf-page">
+    <main className="wf-page flex flex-col gap-md">
       {error ? (
         <FailureLine
           message={error}
@@ -299,31 +379,72 @@ export function Triggers({
       {!workflowId ? (
         <p>Choose a workflow to see its triggers.</p>
       ) : unpublished ? (
-        <EmptyState
-          title="Choose when this workflow runs"
-          description="Publish from the editor to run it on a click, or add a schedule to run it on a timer."
-          primaryAction={
-            onOpenEditor
-              ? { label: "Open editor", onSelect: onOpenEditor }
-              : undefined
-          }
-        />
+        <>
+          <EmptyState
+            title="Not published yet"
+            description="Publish this workflow, then switch it on here to run on a schedule or when an App event happens."
+            primaryAction={
+              onOpenCanvas
+                ? { label: "Open canvas", onSelect: onOpenCanvas }
+                : undefined
+            }
+          />
+          {settings}
+        </>
       ) : !definition ? (
         !error && <LoadingState message="Loading published triggers…" />
       ) : (
         <>
-          {!definition.triggers?.length ? (
-            <EmptyState
-              variant="quiet"
-              title="Run on a click or a timer"
-              description="Run this published workflow from the editor. Add a schedule there to start it automatically."
-              primaryAction={
-                onOpenEditor
-                  ? { label: "Open editor", onSelect: onOpenEditor }
-                  : undefined
-              }
-            />
-          ) : null}
+          <Surface
+            placement="embedded"
+            size="sm"
+            className="p-md"
+            data-workflow-switch
+          >
+            <div className="flex items-start gap-md">
+              <span className="wf-switch" data-mixed={state.kind === "partly"}>
+                <Switch
+                  aria-label="Workflow on"
+                  aria-busy={pending}
+                  aria-checked={state.kind === "partly" ? "mixed" : undefined}
+                  checked={state.kind === "on" || state.kind === "partly"}
+                  disabled={switchDisabled}
+                  onCheckedChange={(checked) => {
+                    // A partly-on workflow retries what is off, never turns the rest off.
+                    void setOn(state.kind === "partly" ? true : checked);
+                  }}
+                />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-2xs">
+                <h2 className="flex flex-wrap items-center gap-xs">
+                  <span>{switchLabel(state)}</span>
+                  {state.kind === "partly" ? (
+                    <Status label="Some triggers off" tone="warning" />
+                  ) : null}
+                </h2>
+                <p className="text-sm text-(--stipe-fg-muted)">
+                  {state.kind === "on"
+                    ? "Every trigger below starts this workflow by itself."
+                    : state.kind === "partly"
+                      ? `${state.notOn.join(", ")} ${state.notOn.length === 1 ? "is" : "are"} not on yet. Switch it on again to retry.`
+                      : state.kind === "unavailable"
+                        ? "Add a schedule or an App event below to switch this workflow on."
+                        : "Nothing starts this workflow by itself. You can still run it by hand."}
+                </p>
+                {ahead ? (
+                  <p role="status" className="text-sm text-(--stipe-fg-muted)">
+                    Publish your trigger changes first; the switch uses the
+                    published version.
+                  </p>
+                ) : null}
+                {failures.length ? (
+                  <p role="alert" className="text-sm">
+                    {failureWords(failures, failedVerb)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </Surface>
           {Object.keys(definition.apps).length ? (
             <FieldSet
               legend="Apps for arming"
@@ -351,7 +472,7 @@ export function Triggers({
                     <Select
                       required
                       value={bindingsByAlias.get(alias) ?? ""}
-                      disabled={pending !== null}
+                      disabled={pending}
                       onChange={(event) => {
                         const installationId = event.currentTarget.value;
                         setAppBindings((current) => ({
@@ -381,18 +502,18 @@ export function Triggers({
           ) : null}
           {chatsUnavailable ? (
             <p>
-              Chats could not be loaded, so triggers armed now will not report
-              to a chat.
+              Chats could not be loaded, so triggers switched on now will not
+              report to a chat.
             </p>
           ) : null}
           {chats.length ? (
             <Field
               label="Report to chat"
-              description="Post each triggered run's result to a chat when it ends. Applies when you arm."
+              description="Post each triggered run's result to a chat when it ends. Applies when you switch it on."
             >
               <Select
                 value={reportTo}
-                disabled={pending !== null}
+                disabled={pending}
                 onChange={(event) => {
                   setReportTo(event.currentTarget.value);
                 }}
@@ -406,107 +527,81 @@ export function Triggers({
               </Select>
             </Field>
           ) : null}
-          <Surface placement="embedded" size="sm">
-            <DataList className="@container">
-              <DataRow className="flex flex-wrap items-start">
-                <div className="min-w-0 flex-1 basis-full @sm:basis-48">
-                  <strong>Manual</strong>
-                  <p>Run the published workflow with its inputs.</p>
-                </div>
-                <Status label="Always available" tone="neutral" />
-              </DataRow>
-              {(definition.triggers ?? []).map((trigger) => {
-                const row = armed.find((item) => item.triggerId === trigger.id);
-                const isArmed = row?.state === "active";
-                const needsRearm =
-                  row?.state === "paused" || Boolean(row?.lastError);
-                const disabled =
-                  !triggerControl ||
-                  missingBinding ||
-                  error !== null ||
-                  pending !== null ||
-                  trigger.on === "webhook";
-                return (
-                  <DataRow
-                    key={trigger.id}
-                    data-trigger-id={trigger.id}
-                    className="flex flex-wrap items-start"
-                  >
-                    <div className="min-w-0 flex-1 basis-full @sm:basis-48">
-                      <strong>{trigger.title ?? trigger.id}</strong>
-                      <p>
-                        {trigger.on === "schedule"
-                          ? `Schedule · ${scheduleSummary(trigger.cron)}`
-                          : trigger.on === "event"
-                            ? `App event · ${apps.find((app) => app.appId === new Map(Object.entries(definition.apps)).get(trigger.app)?.appId)?.displayName ?? trigger.app} · ${eventLabel(trigger.event)}`
-                            : "Webhook · unavailable"}
-                      </p>
+          <FieldSet legend="Starts when">
+            <Surface placement="embedded" size="sm">
+              <DataList className="@container">
+                <DataRow className="flex flex-wrap items-start">
+                  <div className="min-w-0 flex-1 basis-full @sm:basis-48">
+                    <strong>Manual</strong>
+                    <p>Run the published workflow with its inputs.</p>
+                  </div>
+                  <Status label="Always available" tone="neutral" />
+                </DataRow>
+                {triggers.map((trigger) => {
+                  const row = armed.find(
+                    (item) => item.triggerId === trigger.id,
+                  );
+                  return (
+                    <DataRow
+                      key={trigger.id}
+                      data-trigger-id={trigger.id}
+                      className="flex flex-wrap items-start"
+                    >
+                      <div className="min-w-0 flex-1 basis-full @sm:basis-48">
+                        <strong>{triggerName(trigger)}</strong>
+                        <p>
+                          {trigger.on === "schedule"
+                            ? `Schedule · ${scheduleSummary(trigger.cron)}`
+                            : trigger.on === "event"
+                              ? `App event · ${appName(trigger)} · ${eventLabel(trigger.event)}`
+                              : "Webhook · unavailable"}
+                        </p>
+                        {row?.lastError ? (
+                          <p role="alert">{row.lastError}</p>
+                        ) : null}
+                      </div>
                       <Status
                         label={
-                          row?.state === "paused"
-                            ? "Paused"
-                            : isArmed
-                              ? "Armed"
-                              : "Not armed"
+                          trigger.on === "webhook"
+                            ? "Unavailable"
+                            : row?.state === "paused"
+                              ? "Paused"
+                              : row?.state === "active"
+                                ? "On"
+                                : "Off"
                         }
                         tone={
                           row?.state === "paused"
                             ? "error"
-                            : isArmed
+                            : row?.state === "active"
                               ? "success"
                               : "neutral"
                         }
                       />
-                      {row?.lastError ? (
-                        <p role="alert">{row.lastError}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-xs">
-                      {needsRearm ? (
-                        <Button
-                          variant="outline"
-                          disabled={disabled}
-                          loading={pending === trigger.id}
-                          onClick={() => {
-                            void toggle(trigger.id, false);
-                          }}
-                        >
-                          Re-arm
-                        </Button>
-                      ) : null}
-                      {row?.state === "paused" ? (
-                        <Button
-                          variant="outline"
-                          disabled={disabled}
-                          onClick={() => {
-                            void toggle(trigger.id, true);
-                          }}
-                        >
-                          Disarm
-                        </Button>
-                      ) : null}
-                      <label className="flex items-center gap-xs">
-                        <Switch
-                          aria-label={`Arm ${trigger.title ?? trigger.id}`}
-                          aria-busy={pending === trigger.id}
-                          checked={isArmed}
-                          disabled={disabled}
-                          onCheckedChange={(checked) => {
-                            void toggle(trigger.id, !checked);
-                          }}
-                        />
-                        {row?.state === "paused"
-                          ? "Paused"
-                          : isArmed
-                            ? "On"
-                            : "Off"}
-                      </label>
-                    </div>
-                  </DataRow>
-                );
-              })}
-            </DataList>
-          </Surface>
+                    </DataRow>
+                  );
+                })}
+              </DataList>
+            </Surface>
+          </FieldSet>
+          {upcoming.length ? (
+            <FieldSet
+              legend={anyOn ? "Next 3 runs" : "Would run once it is on"}
+            >
+              <ol
+                aria-label={anyOn ? "Next 3 runs" : "Would run once it is on"}
+                className="text-sm"
+              >
+                {upcoming.map(({ at, trigger }) => (
+                  <li key={`${trigger.id}-${String(at)}`}>
+                    {runWords(at, trigger.cron.timeZone)} ·{" "}
+                    {triggerName(trigger)}
+                  </li>
+                ))}
+              </ol>
+            </FieldSet>
+          ) : null}
+          {settings}
         </>
       )}
     </main>

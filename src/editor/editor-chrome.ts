@@ -11,6 +11,8 @@ export type EditorChromeState = Readonly<{
   version: number | undefined;
   /** The commit of the open version, when known. */
   commit: string | undefined;
+  /** The newest published version, when there is one: the next publish is the one after it. */
+  latestVersion: number | undefined;
   /** This draft is identical to a published version. */
   unchangedPublished: boolean;
   durability: "memory" | "persistent";
@@ -140,7 +142,9 @@ export function editorChrome(
                   ? "Check status"
                   : state.publishFailed
                     ? "Try again"
-                    : "Publish",
+                    : state.latestVersion === undefined
+                      ? "Publish"
+                      : `Publish as v${String(state.latestVersion + 1)}`,
               variant: state.unchangedPublished
                 ? ("ghost" as const)
                 : state.hasRunPanel

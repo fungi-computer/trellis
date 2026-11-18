@@ -19,7 +19,6 @@ import { JsonField } from "./value-field.js";
 import { MappingField } from "./mapping-field.js";
 import type { Draft, DraftDocument } from "./draft-store.js";
 import { methodFor, nodePorts } from "./graph.js";
-import { TriggerFields } from "./trigger-fields.js";
 import { InputFields, MappedOutputs } from "./input-fields.js";
 import { CodeFields } from "./code-node.js";
 import { StepPanel } from "./step-panel.js";
@@ -144,14 +143,6 @@ function ScopedInspector({
         <MappedOutputs
           value={draft.definition.output}
           nodes={draft.definition.nodes}
-        />
-        <TriggerFields
-          definition={draft.definition}
-          catalog={catalog}
-          appDisplay={appDisplay}
-          onChange={(definition) => {
-            onChange({ ...draft, definition });
-          }}
         />
       </div>
     );

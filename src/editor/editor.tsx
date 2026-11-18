@@ -431,6 +431,7 @@ function Editor({
       {
         version: state.version,
         commit: viewedVersion?.commit,
+        latestVersion: state.versions.at(0)?.version,
         unchangedPublished,
         durability: document.durability,
         unsaved: state.draft !== state.document?.draft,
@@ -560,7 +561,8 @@ function Editor({
             !readOnly &&
             !publishError ? (
               <p role="status" className="wf-muted wf-bar-note">
-                Published.
+                Published as v{String(publishedVersion)}. Switch it on in
+                Triggers.
               </p>
             ) : null}
             {runPanel && runVersion === undefined ? (

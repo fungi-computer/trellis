@@ -39,12 +39,13 @@ import { workflowIdSchema } from "@fungi.computer/braid";
  * plain Error carrying the host AppError's own `code`, never as an AppError.
  */
 const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
-const toolLabels = {
-  runs: "Runs",
-  editor: "Editor",
-  triggers: "Triggers",
-} as const;
-type Tool = keyof typeof toolLabels;
+/** The tool row of an open workflow, in the order it is shown. */
+const tools = [
+  { id: "canvas", label: "Canvas" },
+  { id: "runs", label: "Runs" },
+  { id: "triggers", label: "Triggers" },
+] as const;
+type Tool = (typeof tools)[number]["id"];
 export type WorkflowScope =
   | { kind: "all-runs" | "templates" | "all-workflows" | "schedules" }
   | { kind: "workflow"; workflowId: string };
@@ -83,7 +84,7 @@ export function WorkflowWorkspace({
   const [history] = useState(() =>
     createAppHistory<Place>({
       scope: initialScope,
-      tool: "editor",
+      tool: "canvas",
       selectedRun: null,
     }),
   );
@@ -107,6 +108,8 @@ export function WorkflowWorkspace({
   const workflowId = scope.kind === "workflow" ? scope.workflowId : null;
   // Keep the draft's autosave lifetime when navigating to another scope.
   const [editorWorkflowId, setEditorWorkflowId] = useState(workflowId);
+  // Triggers edit the same draft, so the canvas reads it again afterwards.
+  const [canvasReads, setCanvasReads] = useState(0);
   const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
   const [error, setError] = useState<Error | null>(null);
   // Git access is asked for in use, never at install: until the owner
@@ -123,7 +126,7 @@ export function WorkflowWorkspace({
     (id: string) => {
       history.push({
         scope: { kind: "workflow", workflowId: id },
-        tool: "editor",
+        tool: "canvas",
         selectedRun: null,
       });
       setRecent((current) =>
@@ -264,7 +267,7 @@ export function WorkflowWorkspace({
   );
   const title = workflows.find((item) => item.workflowId === workflowId)?.title;
   const home = () => {
-    go({ scope: { kind: "all-runs" }, tool: "editor", selectedRun: null });
+    go({ scope: { kind: "all-runs" }, tool: "canvas", selectedRun: null });
   };
   // A Team with no workflows opens on what Trellis is for, not an empty run list.
   const showWelcome =
@@ -329,24 +332,8 @@ export function WorkflowWorkspace({
   const crumbs: readonly ChromeCrumb[] = [
     trellis,
     ...(scope.kind === "all-runs" ? [] : [scopeCrumb]),
-    ...(scope.kind === "workflow"
-      ? [
-          {
-            id: "tool",
-            label: toolLabels[tool],
-            siblings: Object.entries(toolLabels).map(([id, label]) => ({
-              id,
-              label,
-            })),
-            select: (id?: string) => {
-              if (id !== "editor" && id !== "runs" && id !== "triggers") return;
-              go({ tool: id, selectedRun: null });
-            },
-          },
-        ]
-      : []),
   ];
-  const editing = scope.kind === "workflow" && tool === "editor";
+  const editing = scope.kind === "workflow" && tool === "canvas";
   const share = browserActions
     ? [
         {
@@ -427,6 +414,24 @@ export function WorkflowWorkspace({
           </TabsList>
         </Tabs>
       ) : null}
+      {scope.kind === "workflow" ? (
+        <Tabs
+          className="wf-sections"
+          value={tool}
+          onValueChange={(id) => {
+            const next = tools.find((item) => item.id === id);
+            if (next) go({ tool: next.id, selectedRun: null });
+          }}
+        >
+          <TabsList aria-label="Workflow tools">
+            {tools.map(({ id, label }) => (
+              <TabsTrigger key={id} value={id}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      ) : null}
       {needsGit &&
       (scope.kind === "all-runs" || scope.kind === "all-workflows") ? (
         <main className="wf-page wf-invitation">
@@ -495,7 +500,7 @@ export function WorkflowWorkspace({
       <div className="wf-editor-host" hidden={!editing}>
         {store && editorWorkflowId ? (
           <WorkflowEditor
-            key={editorWorkflowId}
+            key={`${editorWorkflowId}:${String(canvasReads)}`}
             store={store}
             active={editing}
             test={{ client, workflowId: editorWorkflowId }}
@@ -567,7 +572,7 @@ export function WorkflowWorkspace({
             go({ scope: { kind: "all-workflows" } });
           }}
           onOpenEditor={() => {
-            go({ tool: "editor" });
+            go({ tool: "canvas" });
           }}
         />
       ) : null}
@@ -575,8 +580,12 @@ export function WorkflowWorkspace({
         <Triggers
           client={client}
           workflowId={workflowId}
-          onOpenEditor={() => {
-            go({ tool: "editor" });
+          store={store}
+          onOpenCanvas={() => {
+            go({ tool: "canvas" });
+          }}
+          onChanged={() => {
+            setCanvasReads((value) => value + 1);
           }}
         />
       ) : null}

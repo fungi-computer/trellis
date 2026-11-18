@@ -204,3 +204,13 @@ body,
 .wf-sections [role="tablist"] {
   --tab-height: 2rem;
 }
+
+/* A partly-on workflow is neither on nor off: the switch shows the warning hue. */
+.wf-switch[data-mixed="true"] .caps-switch {
+  --caps-control-ink: var(--color-warning);
+}
+.wf-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding-block-start: var(--spacing-3xs, 2px);
+}

@@ -39,7 +39,7 @@ const triggerIds = defineIdFamily({
 
 type Trigger = NonNullable<WorkflowDefinition["triggers"]>[number];
 
-/** Editing a definition never arms it. Published controls belong to the Triggers view. */
+/** Editing a definition never arms it. The Triggers tab hosts these fields, and its On switch arms what was published. */
 export function TriggerFields({
   definition,
   catalog,
@@ -111,10 +111,7 @@ export function TriggerFields({
     setExpanded(id);
   }
   return (
-    <FieldSet
-      legend="Triggers"
-      description="Publish your changes, then switch the triggers on in Triggers."
-    >
+    <FieldSet legend="Add or change triggers">
       {projection === null ? (
         <p role="alert">
           Fix the workflow input schema before mapping triggers.
@@ -355,7 +352,7 @@ export function TriggerFields({
         </Button>
       </div>
       {!events.length ? (
-        <p className="wf-muted">
+        <p className="text-sm text-(--stipe-fg-muted)">
           None of your installed Apps offers an event to start from yet.
         </p>
       ) : null}

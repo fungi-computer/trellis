@@ -76,3 +76,37 @@ export function scheduleSummary(cron: {
 }) {
   return `${cadenceWords(cron.expression)} · ${cron.timeZone}`;
 }
+
+/** The next occurrences of a schedule, in its own time zone; none when it never fires again. */
+export function nextRuns(
+  cron: { expression: string; timeZone: string },
+  count: number,
+  after: number,
+): readonly number[] {
+  const parsed = Cron.parse(cron.expression, cron.timeZone);
+  if (Result.isFailure(parsed)) return [];
+  const runs: number[] = [];
+  let cursor = after;
+  try {
+    while (runs.length < count) {
+      cursor = Cron.next(parsed.success, new Date(cursor)).getTime();
+      runs.push(cursor);
+    }
+  } catch {
+    // effect/Cron throws when a cadence never occurs again.
+  }
+  return runs;
+}
+
+/** One upcoming run in words, in the schedule's zone: "Mon 9 Nov, 09:00". */
+export function runWords(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  }).format(new Date(at));
+}

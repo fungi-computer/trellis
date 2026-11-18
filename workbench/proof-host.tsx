@@ -51,10 +51,22 @@ export function createProofHost() {
     },
   };
   function ProofHeader() {
+    // Tourtois keeps a tiled phone window's bar to one row; so does this one.
+    const phone = useSyncExternalStore(
+      (listener) => {
+        const query = globalThis.matchMedia("(max-width: 640px)");
+        query.addEventListener("change", listener);
+        return () => {
+          query.removeEventListener("change", listener);
+        };
+      },
+      () => globalThis.matchMedia("(max-width: 640px)").matches,
+    );
     const current = useSyncExternalStore(subscribe, () => state);
     return (
       <WindowHeader
         title="Trellis"
+        data-phone-compact={phone || undefined}
         popover={document.body}
         {...(current.crumbs === undefined ? {} : { crumbs: current.crumbs })}
         {...(current.primary === undefined ? {} : { primary: current.primary })}
