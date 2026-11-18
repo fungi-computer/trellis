@@ -12,6 +12,7 @@ import {
 } from "@fungi.computer/braid";
 import type { Draft } from "./draft-store.js";
 import { codeNodePorts } from "./code-node.js";
+import { pinToken, pinWords, type PinToken } from "./pins.js";
 
 export function methodFor(
   definition: WorkflowDefinition,
@@ -101,6 +102,40 @@ export function nodePorts(
   return { inputs, outputs };
 }
 
+/** One port's schema, or nothing when the node has no such port. */
+export function portOf(
+  side: Readonly<Record<string, PortSchema>>,
+  key: string,
+): PortSchema | undefined {
+  return Object.hasOwn(side, key) ? side[key] : undefined;
+}
+
+/** Why a wire was refused, so the editor can offer a way forward. */
+export type ConnectRefusal =
+  | {
+      readonly kind: "mismatch";
+      readonly from: PinToken;
+      readonly to: PinToken;
+    }
+  | { readonly kind: "cycle" }
+  | { readonly kind: "other" };
+
+const sourceWords = {
+  text: "Text",
+  number: "A number",
+  "yes-no": "A yes / no",
+  list: "A list",
+  fields: "Fields",
+  image: "An image",
+  "file-path": "A file path",
+  any: "A value",
+  flow: "An order",
+} satisfies Record<PinToken, string>;
+
+function mismatchMessage(from: PinToken, to: PinToken) {
+  return `${sourceWords[from]} doesn't fit ${pinWords[to]}.`;
+}
+
 export function connect(
   draft: Draft,
   catalog: Catalog,
@@ -108,9 +143,18 @@ export function connect(
   to: PortRef,
 ):
   | { readonly ok: true; readonly draft: Draft }
-  | { readonly ok: false; readonly message: string } {
+  | {
+      readonly ok: false;
+      readonly message: string;
+      readonly reason: ConnectRefusal;
+    } {
   const target = draft.definition.nodes.find((node) => node.id === to.node);
-  if (!target) return { ok: false, message: "Choose a destination node" };
+  if (!target)
+    return {
+      ok: false,
+      message: "Choose a destination node",
+      reason: { kind: "other" },
+    };
   const review = target.kind === "review" && to.port === "show";
   const map = target.kind === "map" && to.port === "items";
   const definition: WorkflowDefinition = {
@@ -145,9 +189,36 @@ export function connect(
         issue.node === to.node &&
         ["unknown_port", "unassignable_edge", "subgraph"].includes(issue.code)),
   );
-  return refusal
-    ? { ok: false, message: refusal.message }
-    : { ok: true, draft: { ...draft, definition } };
+  if (!refusal) return { ok: true, draft: { ...draft, definition } };
+  if (refusal.code === "cycle")
+    return {
+      ok: false,
+      message: refusal.message,
+      reason: { kind: "cycle" },
+    };
+  const source = portOf(
+    nodePorts(draft.definition, catalog, from.node).outputs,
+    from.port,
+  );
+  const sink = portOf(nodePorts(definition, catalog, to.node).inputs, to.port);
+  if (refusal.code === "unassignable_edge" && source && sink) {
+    const reason = {
+      kind: "mismatch",
+      from: pinToken(
+        draft.definition.nodes.find((node) => node.id === from.node),
+        "outputs",
+        from.port,
+        source,
+      ),
+      to: pinToken(target, "inputs", to.port, sink),
+    } as const;
+    return {
+      ok: false,
+      message: mismatchMessage(reason.from, reason.to),
+      reason,
+    };
+  }
+  return { ok: false, message: refusal.message, reason: { kind: "other" } };
 }
 
 export function addNode(

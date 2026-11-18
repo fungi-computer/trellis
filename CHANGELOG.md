@@ -1,5 +1,46 @@
 # @fungi.computer/trellis
 
+## 0.18.0
+
+### Minor Changes
+
+- Changes since 0.17.1:
+
+  - fix(trellis): light the active add-step row with a theme-adaptive tint,
+    without a fade
+  - fix(trellis): paint the active add-step row so the lit row is the ghost row
+  - fix(trellis): light only the active add-step row, never a parked pointer's
+  - fix(trellis): type the add-step canvas inset so the editor typechecks
+  - fix(trellis): keep the add-step button off the steps and the ghost on the
+    lit row
+  - fix(shed): let a key's run take a requestId, and repin the Trellis template
+    digests
+  - fix(trellis): colour the mismatch legend with the canvas's pin colours
+  - feat(trellis): colour pins and wires by type, add Caps zoom buttons and a
+    Last run footer
+  - fix(trellis): fit six columns at 0.9 zoom and lift pin colours to mid
+    lightness
+  - fix(trellis): make the default canvas view legible at 1440
+  - feat(trellis): add a step by search, drag off a pin, one panel beside the
+    canvas
+  - feat(trellis): find the steps that fit a pin and mend a wire the types
+    refuse
+  - feat(trellis): draw the canvas left to right with typed pins, zoom and a
+    minimap
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @fungi.computer/agar@0.22.0
+  - @fungi.computer/caps@0.12.1
+  - @fungi.computer/puffball@0.12.0
+  - @fungi.computer/shiitake-extensions@0.11.8
+  - @fungi.computer/braid@0.5.2
+  - @fungi.computer/workflows-wire@0.5.2
+
 ## 0.17.1
 
 ### Patch Changes

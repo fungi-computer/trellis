@@ -11,6 +11,7 @@ import {
   type WorkflowDefinition,
 } from "@fungi.computer/braid";
 import { methodFor } from "./graph.js";
+import { isFlowPin, pinWords, valuePinToken } from "./pins.js";
 import type { DraftDocument } from "./draft-store.js";
 
 export type DisplayEdge = {
@@ -86,52 +87,6 @@ export function displayEdges(
   return edges;
 }
 
-/** Exclusive branch descendants appear in their branch, while shared joins stay outside. */
-export function conditionBranches(
-  graph: Graph,
-  node: Extract<Node, { kind: "condition" }>,
-) {
-  const edges = displayEdges(graph);
-  const reachable = (port: "true" | "false") => {
-    const ids = new Set<string>();
-    const pending = edges
-      .filter((edge) => edge.from.node === node.id && edge.from.port === port)
-      .map((edge) => edge.to.node);
-    while (pending.length) {
-      const id = pending.pop();
-      if (!id || id === node.id || ids.has(id)) continue;
-      ids.add(id);
-      pending.push(
-        ...edges
-          .filter((edge) => edge.from.node === id)
-          .map((edge) => edge.to.node),
-      );
-    }
-    return ids;
-  };
-  const yes = reachable("true"),
-    no = reachable("false");
-  return {
-    true: graph.nodes.filter((step) => yes.has(step.id) && !no.has(step.id)),
-    false: graph.nodes.filter((step) => no.has(step.id) && !yes.has(step.id)),
-  };
-}
-
-export function bodySteps(graph: Graph) {
-  const grouped = new Set(
-    graph.nodes.flatMap((node) =>
-      node.kind === "condition"
-        ? Object.values(conditionBranches(graph, node))
-            .flat()
-            .map((step) => step.id)
-        : [],
-    ),
-  );
-  return graph.nodes.filter(
-    (step) => step.kind !== "transform" && !grouped.has(step.id),
-  );
-}
-
 export function humanTitle(id: string) {
   const words = id
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
@@ -147,40 +102,35 @@ export function portPresentation(key: string, schema: PortSchema) {
     ["note", "Your note"],
     ["after", "After step"],
   ]);
-  const types = new Map([
-    ["string", "text"],
-    ["boolean", "yes / no"],
-    ["integer", "whole number"],
-    ["array", "list"],
-    ["object", "fields"],
-  ]);
-  const type =
-    schema.format?.replace("fungi:", "") ??
-    (schema.type
-      ? (types.get(schema.type) ?? schema.type)
-      : key === "after"
-        ? "signal"
-        : "anything");
+  const label = labels.get(key) ?? humanTitle(key);
+  const token = isFlowPin(undefined, "inputs", key, schema)
+    ? "flow"
+    : valuePinToken(schema);
   return {
-    label: labels.get(key) ?? humanTitle(key),
-    type,
+    label,
     help:
       schema.description ??
-      `${humanTitle(key)} carries ${type}. Connect it to another step to pass the value along.`,
+      `${label} carries ${pinWords[token].toLowerCase()}. Connect it to another step to pass the value along.`,
   };
 }
 
-const purposes = {
-  input: "Supply values for this run.",
-  map: "Run the body once for each item.",
-  repeat: "Run the body again until its stop condition is met.",
-  review: "Pause for a person to choose what happens next.",
-  condition: "Choose a branch based on the supplied values.",
-  transform: "Prepare values for the next steps.",
-  wait: "Pause before continuing.",
-  code: "Transform the supplied values with this script.",
+const kindWords = {
+  input: "Input",
+  map: "For each",
+  repeat: "Repeat",
+  review: "Review",
+  condition: "Condition",
+  transform: "Transform",
+  wait: "Wait",
+  code: "Code",
 } as const;
 
+/**
+ * What a card says about a step: a title for the header and, on its muted right
+ * side, where the step comes from (`Prints · Generate image`, or its kind). A
+ * step's own `title` always wins; the words below only name a step that has
+ * none, such as one saved before steps could be named.
+ */
 export function nodePresentation(
   definition: WorkflowDefinition,
   catalog: Catalog,
@@ -190,48 +140,79 @@ export function nodePresentation(
 ) {
   const method = methodFor(definition, catalog, node);
   if (node.kind === "app") {
-    const raw = method?.description.replace(/\s+/gu, " ").trim();
-    const description = raw === "" ? undefined : raw;
-    const purpose = description?.split(/(?<=[.!?])\s/u)[0];
     const app = Object.hasOwn(definition.apps, node.app)
       ? appDisplay[definition.apps[node.app].appId]?.displayName
       : undefined;
     // Before the first catalog answer a step is loading, not unavailable.
-    const title =
-      method || loading ? humanTitle(node.method) : "App method unavailable";
+    if (!method && !loading)
+      return {
+        title: node.title ?? "App method unavailable",
+        meta: `${app ?? "App"} · Install the declared App to describe this step.`,
+      };
+    const name = humanTitle(node.method);
     return {
-      title,
-      purpose: `${app ?? "App"} · ${loading ? "Loading Apps…" : (purpose ?? "Install the declared App to describe this step.")}`,
+      title: node.title ?? name,
+      meta: `${app ?? "App"} · ${method ? name : "Loading Apps…"}`,
     };
   }
   if (node.kind === "code") {
     const input = parseProjection(node.input);
     return {
-      title: input.title ?? humanTitle(node.id),
-      purpose: input.description ?? purposes.code,
+      title: node.title ?? input.title ?? humanTitle(node.id),
+      meta: kindWords.code,
     };
   }
   return {
     title:
-      node.kind === "repeat"
-        ? `Repeat up to ${String(node.maxRounds)} times`
-        : node.kind === "review"
-          ? node.title
-          : node.kind === "map"
-            ? "For each item"
-            : node.kind === "condition"
-              ? "Choose a branch"
-              : node.kind === "transform"
-                ? humanTitle(node.id)
-                : "Wait",
-    purpose: purposes[node.kind],
+      node.kind === "review"
+        ? node.title
+        : (node.title ??
+          (node.kind === "repeat"
+            ? `Repeat up to ${String(node.maxRounds)} times`
+            : node.kind === "map"
+              ? "For each item"
+              : node.kind === "condition"
+                ? "Choose a branch"
+                : node.kind === "transform"
+                  ? humanTitle(node.id)
+                  : "Wait")),
+    meta: kindWords[node.kind],
   };
 }
 
-export function bodyDefinition(definition: WorkflowDefinition, node: Node) {
-  if (node.kind !== "map" && node.kind !== "repeat") return undefined;
-  const graph = definition.subgraphs?.[node.body];
-  return graph ? { ...definition, ...graph } : undefined;
+export const inputTitle = "Workflow input";
+export const inputMeta = kindWords.input;
+
+/** One line for a loop that stays closed on the canvas. */
+export function loopSummary(
+  definition: WorkflowDefinition,
+  node: Extract<Node, { kind: "map" | "repeat" }>,
+) {
+  const count = definition.subgraphs?.[node.body]?.nodes.length ?? 0;
+  const steps = `${String(count)} step${count === 1 ? "" : "s"}`;
+  return node.kind === "map"
+    ? `${steps} · one at a time`
+    : `${steps} · up to ${String(node.maxRounds)} times`;
 }
 
-export const inputPurpose = purposes.input;
+/**
+ * What is wrong with a step, in words for its status line, and which of its
+ * pins to mark. A missing value reads `Needs a path`; anything else keeps the
+ * validator's own sentence.
+ */
+export function nodeProblem(issues: readonly Issue[], nodeId: string) {
+  const first = issues.at(0);
+  if (!first) return undefined;
+  const ports = new Set(
+    issues.flatMap((issue) =>
+      issue.node === nodeId && issue.port ? [issue.port] : [],
+    ),
+  );
+  const words =
+    issues.length > 1
+      ? `${String(issues.length)} problems`
+      : first.code === "required_port" && first.port
+        ? `Needs a ${portPresentation(first.port, {}).label.toLowerCase()}`
+        : first.message;
+  return { words, ports };
+}

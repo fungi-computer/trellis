@@ -14,6 +14,16 @@ export function nodeResultsFor(
   );
 }
 
+/** How many of a loop's recorded iterations have finished; nothing before any ran. */
+export function iterationProgress(results: readonly RunStep[]) {
+  return results.length
+    ? {
+        done: results.filter((step) => step.state === "complete").length,
+        total: results.length,
+      }
+    : undefined;
+}
+
 /** Each body iteration keeps its own recorded lifecycle and admitted output. */
 export function GraphResults({
   results,

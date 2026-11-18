@@ -233,12 +233,12 @@ const checkEachChangeDefinition: WorkflowDefinition = {
 export const checkEachChange: Draft = {
   definition: checkEachChangeDefinition,
   layout: {
-    $input: { x: 0, y: 120 },
-    read: { x: 340, y: 120 },
-    mark: { x: 680, y: 0 },
-    tests: { x: 1020, y: 0 },
-    summarise: { x: 1360, y: 0 },
-    report: { x: 1700, y: 0 },
+    $input: { x: 0, y: 0 },
+    read: { x: 256, y: 0 },
+    mark: { x: 512, y: 0 },
+    tests: { x: 768, y: 0 },
+    summarise: { x: 1024, y: 0 },
+    report: { x: 1280, y: 0 },
   },
 };
 
@@ -435,11 +435,11 @@ const weeklyCoverDefinition: WorkflowDefinition = {
 export const weeklyCover: Draft = {
   definition: weeklyCoverDefinition,
   layout: {
-    $input: { x: 0, y: 120 },
-    prompt: { x: 340, y: 0 },
-    cover: { x: 680, y: 0 },
-    approve: { x: 1020, y: 0 },
-    save: { x: 1360, y: 0 },
+    $input: { x: 0, y: 0 },
+    prompt: { x: 256, y: 0 },
+    cover: { x: 512, y: 0 },
+    approve: { x: 768, y: 0 },
+    save: { x: 1024, y: 0 },
   },
 };
 
@@ -505,8 +505,8 @@ export const mossChange = {
     definition: mossDefinition,
     layout: {
       ...checkEachChange.layout,
-      testsFailed: { x: 1700, y: 220 },
-      tell: { x: 2040, y: 220 },
+      testsFailed: { x: 1280, y: 220 },
+      tell: { x: 1536, y: 220 },
     },
   } satisfies Draft,
 } as const;
@@ -645,14 +645,14 @@ export const storyboard = {
     definition: storyboardDefinition,
     layout: {
       $input: { x: 0, y: 80 },
-      beatItems: { x: 340, y: 80 },
-      forEachBeat: { x: 680, y: 80 },
-      contactSheet: { x: 1020, y: 80 },
+      beatItems: { x: 256, y: 80 },
+      forEachBeat: { x: 512, y: 80 },
+      contactSheet: { x: 768, y: 80 },
       "beat/repeatPanel": { x: 0, y: 0 },
       "attempt/prepare": { x: 0, y: 0 },
-      "attempt/panel": { x: 340, y: 0 },
-      "attempt/keep": { x: 680, y: 0 },
-      "attempt/decision": { x: 1020, y: 0 },
+      "attempt/panel": { x: 256, y: 0 },
+      "attempt/keep": { x: 512, y: 0 },
+      "attempt/decision": { x: 768, y: 0 },
     },
   } satisfies Draft,
   collapsed: {

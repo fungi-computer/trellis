@@ -54,7 +54,7 @@
 .wf-refusal {
   position: absolute;
   z-index: 5;
-  inset-block-end: var(--spacing-sm);
+  inset-block-end: calc(var(--spacing-sm) + 3rem);
   inset-inline-start: var(--spacing-sm);
   margin: 0;
   font-size: var(--text-sm);
@@ -62,14 +62,11 @@
 
 /* Node cards */
 .wf-node {
-  width: 19rem;
+  width: 14rem;
   font-size: max(12px, var(--text-xs));
 }
 .wf-node[data-selected] {
   border-color: color-mix(in oklab, var(--color-primary) 70%, transparent);
-}
-.wf-node[data-invalid] {
-  border-color: color-mix(in oklab, var(--color-error) 55%, transparent);
 }
 .wf-node-head {
   display: flex;
@@ -80,11 +77,16 @@
 }
 .wf-node-title {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   gap: 0.35em;
   min-width: 0;
-  font-family: var(--font-mono);
+  max-width: 68%;
+  overflow: hidden;
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .wf-ports {
   display: grid;
@@ -116,29 +118,20 @@
 .wf-port[data-side="out"] {
   justify-content: flex-end;
 }
-.wf-port-type {
-  color: color-mix(
-    in oklab,
-    var(--wf-port, var(--wf-muted)) 75%,
-    var(--color-base-content)
-  );
-  font-family: var(--font-mono);
-  font-size: max(12px, var(--text-xs));
-}
 .wf-node .wf-handle {
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--color-base-100);
-  background: var(--wf-port, var(--wf-muted));
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--color-base-100);
+  background: var(--wf-pin, var(--wf-muted));
 }
 
-.wf-canvas .react-flow__controls-button {
-  background: var(--color-base-100);
-  color: var(--color-base-content);
-  border-color: var(--wf-line);
+/* The zoom buttons and the overview map sit 16px in from the canvas edge. */
+.wf-canvas .react-flow__panel {
+  margin: 16px;
 }
-.wf-canvas .react-flow__controls-button svg {
-  fill: currentColor;
+.wf-canvas-controls {
+  display: flex;
+  gap: var(--spacing-2xs);
 }
 
 .wf-control-mark {
@@ -184,45 +177,168 @@
   }
 }
 
-.wf-layout {
+/* The canvas with one panel at its right, split by a hairline. No frames. */
+.wf-stage {
   position: relative;
   display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
 }
-.wf-view-anchor {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 0;
-  height: 0;
+.wf-stage-phone {
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
-.wf-split {
+.wf-stage-body {
   position: relative;
   flex: 1;
-  min-height: 0;
-  height: 100%;
-  isolation: isolate;
-}
-.wf-tile,
-.wf-tile-group {
-  position: absolute;
   min-width: 0;
+  min-height: 0;
+  margin: 0;
 }
-.wf-tile[hidden],
-.wf-tile-group[hidden] {
+.wf-stage-body[hidden] {
   display: none;
 }
-.wf-tile-body {
-  min-height: 0;
-  overflow: auto;
-}
-.wf-tile-body > .wf-canvas {
+.wf-stage-body > .wf-canvas {
   height: 100%;
 }
-.wf-palette-entry {
-  padding-block: var(--spacing-xs);
+.wf-panel {
+  position: relative;
+  flex: none;
+  min-width: 0;
+  overflow: auto;
+  border-inline-start: 1px solid var(--wf-line);
+}
+.wf-stage-phone > .wf-panel {
+  flex: 1;
+  border-inline-start: 0;
+  overflow: auto;
+}
+.wf-panel-handle {
+  position: absolute;
+  inset-block-start: 50%;
+  z-index: 2;
+  transform: translate(50%, -50%);
+}
+
+/* Adding a step: a button and a hint on the canvas, and the search at the
+   pointer with a ghost of the step it would add. */
+.wf-add-step {
+  position: absolute;
+  inset-block-start: var(--spacing-sm);
+  inset-inline-start: var(--spacing-sm);
+  z-index: 4;
+}
+.wf-empty-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--wf-muted);
+  pointer-events: none;
+}
+/* The search and the mismatch popover are portalled out of the editor, so
+   they carry the editor's two line and text tones themselves. */
+.wf-anchored {
+  font-family: var(--font-sans);
+  color: var(--color-base-content);
+  --wf-line: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  --wf-muted: color-mix(in oklab, var(--color-base-content) 62%, transparent);
+}
+.wf-ghost {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: 2.75rem;
+  padding-inline: var(--spacing-sm);
+  border: 1px dashed color-mix(in oklab, var(--color-primary) 70%, transparent);
+  border-radius: var(--radius-box);
+  background: color-mix(in oklab, var(--color-base-100) 80%, transparent);
+  font-size: var(--text-sm);
+}
+.wf-search,
+.wf-mismatch {
+  gap: var(--spacing-xs);
+}
+/* The list is one column however tall the popover lets it grow. */
+.wf-search .menu {
+  flex-wrap: nowrap;
+  width: 100%;
+}
+/* One row is lit: the active one, which the ghost follows. A pointer parked over
+   another row (no move yet) must not light it as well. */
+.wf-search [role="option"]:not([data-active]):hover {
+  background-color: transparent;
+}
+.wf-search [role="option"] {
+  /* The lit row follows the keys at once; a fade would trail the ghost. */
+  transition: none;
+}
+.wf-search [role="option"][data-active] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-base-content) 14%,
+    transparent
+  );
+}
+.wf-search > p,
+.wf-mismatch > p {
+  margin: 0;
+}
+.wf-mismatch-message {
+  font-weight: 600;
+}
+/* The same colours as the pins on the canvas. */
+.wf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2xs) var(--spacing-sm);
+  margin: 0;
+  padding: var(--spacing-xs) 0 0;
+  list-style: none;
+  border-top: 1px solid var(--wf-line);
+  font-size: var(--text-xs);
+}
+.wf-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+}
+.wf-legend-dot {
+  /* The pin colours come from graph-presentation.css, shared with the canvas. */
+  --wf-legend-colour: var(--wf-pin-any);
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--wf-legend-colour);
+}
+.wf-legend-dot[data-pin="text"] {
+  --wf-legend-colour: var(--wf-pin-text);
+}
+.wf-legend-dot[data-pin="number"] {
+  --wf-legend-colour: var(--wf-pin-number);
+}
+.wf-legend-dot[data-pin="yes-no"] {
+  --wf-legend-colour: var(--wf-pin-yes-no);
+}
+.wf-legend-dot[data-pin="list"] {
+  --wf-legend-colour: var(--wf-pin-list);
+}
+.wf-legend-dot[data-pin="fields"] {
+  --wf-legend-colour: var(--wf-pin-fields);
+}
+.wf-legend-dot[data-pin="image"] {
+  --wf-legend-colour: var(--wf-pin-image);
+}
+.wf-legend-dot[data-pin="file-path"] {
+  --wf-legend-colour: var(--wf-pin-file-path);
+}
+.wf-legend-dot[data-pin="any"] {
+  --wf-legend-colour: var(--wf-pin-any);
+}
+.wf-legend-dot[data-pin="flow"] {
+  --wf-legend-colour: var(--wf-pin-flow);
+  border-radius: 2px;
 }
 
 .wf-version {
@@ -230,8 +346,8 @@
   max-width: 100%;
 }
 
-/* The Inspector tile is already the frame: repeated items inside it are
-   separated by a hairline, not boxed again. */
+/* The panel is not boxed: repeated items inside it are separated by a
+   hairline, not boxed again. */
 .wf-pane-body .caps-card-outline {
   --caps-card-outline-face: transparent;
   --caps-card-outline-shadow: none;

@@ -1,7 +1,7 @@
 # Trellis (`@fungi.computer/trellis`)
 
-Trellis builds and runs workflows: typed graphs of your Apps' methods, started
-by hand, on a schedule or by an event.
+Trellis builds and runs workflows: charts of steps that call your Apps' methods,
+started by hand, on a schedule or by an event.
 
 ![The Trellis editor with the Bonsai checks workflow: Workflow input, a Change script node and a Bonsai Checks.report step on the canvas, between the method Palette and the Inspector](docs/media/editor.png)
 
@@ -10,11 +10,27 @@ Trellis is one of the starter Apps of
 on your own Cloudflare account. On Oyster, each run executes on Cloudflare
 Workflows, and its steps call the same App methods your agents use.
 
-## What you can do
+## Quick start
 
-- Drag methods from the **Palette** onto the **Canvas**, wire their typed ports,
-  and set inputs in the **Inspector**. Trellis checks the graph as you edit and
-  marks it **Valid** when it can run.
+In a Fungi monorepo checkout with dependencies installed, run the component
+workbench from the root:
+
+```sh
+pnpm workbench:prepare
+pnpm exec ladle serve --port 61983
+```
+
+Open <http://localhost:61983/?story=trellis--editor&mode=preview&theme=light>.
+This is Trellis's real UI with local fixture data (a sample workflow draft), not
+a live Oyster. To run Trellis on a real Oyster, see [Get it](#get-it).
+
+## Common tasks
+
+- Press **Tab** on the **Canvas** to search for a step and add it where the
+  pointer is, or drag a wire off a pin and let go to see the steps that take it.
+  Wire their typed pins and set inputs in the panel beside the canvas. Trellis
+  checks the graph as you edit and says "Saved" in the header, or how many
+  problems are left.
 - Add review steps, waits, conditions, repeats and maps, or a **Code** node that
   runs your own JavaScript in a sandbox with a time limit.
 - **Publish** an immutable version, then **Run** it with inputs. Drafts never
@@ -55,7 +71,9 @@ and must preserve the running Release.
 
 <img alt="The Trellis editor in the light theme, with a Bonsai Repos.list step and a Workflow input on the canvas" src="docs/media/editor-light.png">
 
-## Get it
+## Reference
+
+### Get it
 
 Trellis installs with the other starter Apps. On a deployed Oyster (see the
 [Oyster quick start](https://github.com/fungi-computer/oyster#deploy-to-cloudflare)),
@@ -72,7 +90,7 @@ Oyster with `git push`, builds them on your Computer and installs them. Sign in
 at `$OYSTER_URL/login` with the owner key and open Trellis from the Tourtois
 desktop. Run `install-apps` again to update; each App keeps its data.
 
-## Change it
+### Change it
 
 Every installed App is also a template you can fork on your own Oyster. Fork
 Trellis into a Bonsai repository and clone it with ordinary `git`:
@@ -95,7 +113,7 @@ your forks with `--repositories <base URL>` and `--ref <branch or tag>`. The
 installer reads all seven starter Apps from that base, so fork them under one
 account.
 
-## How workflows are stored
+### How workflows are stored
 
 Drafts live in Trellis's own SQLite database and save as you edit. Publishing
 writes `workflows/<id>.json` to the installation's `trellis` git repository and
@@ -108,7 +126,7 @@ body-graph positions (`<graphId>/<nodeId>`) sit beside `layout` in the file and
 never change a version's digest. Every one of these keys is optional, so a
 workflow stored without them loads and publishes unchanged.
 
-## Agent tools
+### Agent tools
 
 Agents call Trellis through Oyster's MCP endpoint, or at
 `POST $OYSTER_URL/apps/trellis/methods/<name>` with a key; see
@@ -127,11 +145,10 @@ Agents call Trellis through Oyster's MCP endpoint, or at
 
 `answerReview` exists too, but only a person can answer a review.
 
-## Build and check
+### Build and check
 
-Trellis is a React App built with Vite. The canvas uses React Flow, the panes
-[Maosaico](https://github.com/fungi-computer/maosaico) and the controls
-[Caps](https://github.com/fungi-computer/caps).
+Trellis is a React App built with Vite. The canvas uses React Flow and the
+controls [Caps](https://github.com/fungi-computer/caps).
 
 ```sh
 pnpm install
@@ -148,7 +165,7 @@ are in [backend/methods.ts](backend/methods.ts) and
 [backend/library-methods.ts](backend/library-methods.ts), and
 [package.json](package.json) declares the permissions the App asks for.
 
-## License
+### License
 
 MIT. See [LICENSE](LICENSE).
 

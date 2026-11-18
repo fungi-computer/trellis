@@ -1,29 +1,26 @@
 import { describeAppError } from "@fungi.computer/agar/errors";
 import { FieldSet } from "@fungi.computer/caps/components/field";
 import { Button } from "@fungi.computer/caps/components/button";
-import {
-  DataList,
-  DataListHeading,
-  DataRow,
-} from "@fungi.computer/caps/components/data-list";
-import { SearchInput } from "@fungi.computer/caps/components/input";
-import { Disclosure } from "@fungi.computer/caps/components/disclosure";
 import { Surface } from "@fungi.computer/caps/components/surface";
-import { WorkflowMark } from "./mark.js";
-import { humanTitle } from "./graph-presentation.js";
 import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
-import { validate, type Node, type PortRef } from "@fungi.computer/braid";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { EditorPanes, type EditorPane } from "./panes.js";
-import { WorkflowCanvas } from "./canvas.js";
+import { validate, type Catalog, type PortRef } from "@fungi.computer/braid";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { WorkflowCanvas, type CanvasPoint } from "./canvas.js";
 import {
   graphDraft,
   replaceGraphDraft,
   type NodeAddress,
 } from "./graph-address.js";
-import { addNode, connect, removeNode } from "./graph.js";
+import { connect, removeNode } from "./graph.js";
 import { Inspector } from "./inspector.js";
 import { useDraft } from "./use-draft.js";
 import type { Draft, DraftStore } from "./draft-store.js";
@@ -31,7 +28,17 @@ import {
   PublicationObservationTimeout,
   publicationFailureCopy,
 } from "./draft-store.js";
-import { createCodeNode } from "./code-node.js";
+import { EditorLayout, type EditorView } from "./editor-layout.js";
+import { editorChrome } from "./editor-chrome.js";
+import { PinMismatch, StepSearch } from "./step-search.js";
+import {
+  fitsPin,
+  mismatchOffers,
+  placeStep,
+  stepEntries,
+  type MismatchOffer,
+  type StepEntry,
+} from "./step-catalog.js";
 import { versionRelativeTime } from "../history/relative-time.js";
 import { CatalogLoadingProvider } from "./catalog-loading.js";
 import { useChrome, type ChromeParts } from "../chrome.js";
@@ -54,6 +61,14 @@ function ChromeSlot({
   useChrome("editor", active ? parts : null);
   return null;
 }
+/** Where a step is being added, and the pin it was dragged from, if any. */
+type SearchRequest = Readonly<{ point: CanvasPoint; from?: PortRef }>;
+/** A wire the types refused, with what can be done about it. */
+type PinIssue = Readonly<{
+  point: CanvasPoint;
+  message: string;
+  offers: readonly MismatchOffer[];
+}>;
 function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const state = useDraft(store);
   const runHintId = useId();
@@ -84,14 +99,14 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     };
   }, [store]);
   const [selected, setSelected] = useState<NodeAddress | null>(null);
-  const [selectedPane, setPane] = useState<EditorPane | null>(null);
-  const pane =
-    selectedPane ??
-    (state.draft?.definition.nodes.length ? "canvas" : "palette");
-  const [reveal, setReveal] = useState(0);
-  const [query, setQuery] = useState("");
-  const [openGroups, setOpenGroups] = useState(() => new Set(["Control"]));
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [view, setView] = useState<EditorView>("canvas");
+  const [showRun, setShowRun] = useState(false);
+  const [search, setSearch] = useState<SearchRequest | null>(null);
+  const [searchNote, setSearchNote] = useState<string | null>(null);
+  const [pinCatalog, setPinCatalog] = useState<Catalog | null>(null);
+  const [pinCatalogFailed, setPinCatalogFailed] = useState(false);
+  const [pinIssue, setPinIssue] = useState<PinIssue | null>(null);
+  const root = useRef<HTMLElement>(null);
   const flow = useReactFlow();
   const runVersion =
     state.version ?? publishedVersion ?? state.versions.at(0)?.version;
@@ -116,6 +131,41 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
       window.clearTimeout(timer);
     };
   }, [loading, failed, store, state.version, loadAttempt]);
+  // A wire dragged off a pin can only be matched against Apps whose ports are
+  // known, and the draft loads just the Apps it names: ask for every App's.
+  const palette = document?.palette;
+  useEffect(() => {
+    setPinCatalog(null);
+    setPinCatalogFailed(false);
+    if (!search?.from || !palette) return;
+    let live = true;
+    store.readCatalog(Object.keys(palette)).then(
+      (loaded) => {
+        if (live) setPinCatalog(loaded.catalog);
+      },
+      () => {
+        if (live) setPinCatalogFailed(true);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [search, store, palette]);
+  const entries = useMemo(
+    () => (palette && draft ? stepEntries(palette, draft.definition.apps) : []),
+    [palette, draft],
+  );
+  const searchCatalog = useMemo<Catalog>(
+    () => ({ ...document?.catalog, ...pinCatalog }),
+    [document?.catalog, pinCatalog],
+  );
+  const fits = useMemo(
+    () =>
+      search?.from && draft && pinCatalog
+        ? fitsPin(draft, searchCatalog, entries, search.from)
+        : undefined,
+    [search, draft, pinCatalog, searchCatalog, entries],
+  );
   const chooseVersion = (value: string) => {
     setAutoRunVersion(null);
     setSelected(null);
@@ -191,21 +241,53 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
   const update = (next: Draft) => {
     if (!readOnly) state.setDraft(next);
   };
+  const focusCanvas = () => {
+    root.current?.querySelector<HTMLElement>(".wf-canvas")?.focus();
+  };
+  const closeSearch = () => {
+    setSearch(null);
+    setSearchNote(null);
+    focusCanvas();
+  };
+  /** The middle of the canvas, for what a person asks for without pointing. */
+  const centre = (): CanvasPoint => {
+    const box = root.current
+      ?.querySelector(".wf-canvas")
+      ?.getBoundingClientRect();
+    const client = box
+      ? { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+      : { x: 0, y: 0 };
+    return { client, flow: flow.screenToFlowPosition(client) };
+  };
+  const refuse = (from: PortRef, to: PortRef, point: CanvasPoint) => {
+    const scoped = graphDraft(draft, "root");
+    if (!scoped) return;
+    const result = connect(scoped, catalog, from, to);
+    if (result.ok) return;
+    setSearch(null);
+    setPinIssue({
+      point,
+      message: result.message,
+      offers:
+        result.reason.kind === "mismatch"
+          ? mismatchOffers(scoped, catalog, from, to, point.flow)
+          : [],
+    });
+  };
   const connectPorts = (graphId: string, from: PortRef, to: PortRef) => {
     if (readOnly) return;
     const scoped = graphDraft(draft, graphId);
     if (!scoped) return;
     const result = connect(scoped, catalog, from, to);
-    if (result.ok) {
-      update(replaceGraphDraft(draft, graphId, result.draft));
-      setRefusal(null);
-    } else setRefusal(result.message);
+    if (result.ok) update(replaceGraphDraft(draft, graphId, result.draft));
+    else refuse(from, to, centre());
   };
   const choose = (address: NodeAddress | null) => {
     setAutoRunVersion(null);
     setSelected(address);
-    setPane("node");
-    setReveal((value) => value + 1);
+    setShowRun(false);
+    // A phone shows the step's panel once a step is chosen.
+    if (address) setView("panel");
   };
   const remove = ({ graphId, nodeId }: NodeAddress) => {
     if (readOnly) return;
@@ -218,198 +300,39 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     });
     setSelected(null);
   };
-  const nextId = (scoped: Draft) => {
-    let index = 1;
-    while (
-      scoped.definition.nodes.some((node) => node.id === `node${String(index)}`)
-    )
-      index += 1;
-    return `node${String(index)}`;
-  };
-  const entries = [
-    ...Object.entries(document.palette).flatMap(([appId, methods]) =>
-      Object.entries(methods).map(([method, spec]) => ({
-        key: `${appId}/${method}`,
-        group: appId,
-        name: humanTitle(method),
-        method,
-        description: spec.description,
-        create: (id: string): Node => ({
-          id,
-          kind: "app",
-          app:
-            Object.entries(draft.definition.apps).find(
-              ([, app]) => app.appId === appId,
-            )?.[0] ?? id,
-          method,
-          methodDigest: spec.digest,
-          values: {},
-        }),
-        appId,
-      })),
-    ),
-    {
-      key: "review",
-      group: "Control",
-      name: "Review",
-      method: null,
-      description: "Pause for a human decision",
-      create: (id: string): Node => ({
-        id,
-        kind: "review",
-        title: "Keep this result?",
-        show: [],
-        reviewers: "runner",
-        timeout: 86400000,
-      }),
-      appId: null,
-    },
-    {
-      key: "wait",
-      group: "Control",
-      name: "Wait",
-      method: null,
-      description: "Wait before continuing",
-      create: (id: string): Node => ({ id, kind: "wait", for: 1000 }),
-      appId: null,
-    },
-    {
-      key: "condition",
-      group: "Control",
-      name: "Condition",
-      method: null,
-      description: "Choose a branch",
-      create: (id: string): Node => ({
-        id,
-        kind: "condition",
-        test: { op: "exists", value: { literal: null } },
-      }),
-      appId: null,
-    },
-    {
-      key: "map",
-      group: "Control",
-      name: "Map",
-      method: null,
-      description: "Apply a graph to each item",
-      create: (id: string): Node => ({
-        id,
-        kind: "map",
-        over: { node: "$input", port: "items" },
-        body: `${id}Body`,
-        concurrency: 1,
-        maxItems: 10,
-      }),
-      appId: null,
-    },
-    {
-      key: "repeat",
-      group: "Control",
-      name: "Repeat",
-      method: null,
-      description: "Revise an item until a stop condition is met",
-      create: (id: string): Node => ({
-        id,
-        kind: "repeat",
-        body: `${id}Body`,
-        maxRounds: 3,
-        until: {
-          op: "exists",
-          value: { from: { node: "$input", port: "result" } },
-        },
-      }),
-      appId: null,
-    },
-    {
-      key: "transform",
-      group: "Control",
-      name: "Transform",
-      method: null,
-      description: "Shape values without code",
-      create: (id: string): Node => ({ id, kind: "transform", fields: {} }),
-      appId: null,
-    },
-    {
-      key: "code",
-      group: "Control",
-      name: "Code",
-      method: null,
-      description: "Reshape mapped JSON",
-      create: createCodeNode,
-      appId: null,
-    },
-  ];
-  const add = (key: string, point?: { x: number; y: number }) => {
+  const openSearch = (request: SearchRequest) => {
     if (readOnly) return;
-    const entry = entries.find((item) => item.key === key);
-    if (!entry) return;
-    const graphId = selected?.graphId ?? "root";
-    const scoped = graphDraft(draft, graphId);
+    setPinIssue(null);
+    setSearchNote(null);
+    setSearch(request);
+  };
+  const addStep = (entry: StepEntry) => {
+    if (readOnly || !search) return;
+    const scoped = graphDraft(draft, "root");
     if (!scoped) return;
-    if (scoped.definition.nodes.length >= 64) {
-      setRefusal("A workflow can contain at most 64 nodes.");
+    const placed = placeStep(scoped, entry, search.point.flow);
+    if (!placed.ok) {
+      setSearchNote(placed.message);
       return;
     }
-    const node = entry.create(nextId(scoped));
-    let next = addNode(
-      scoped,
-      node,
-      point ?? {
-        x: ((scoped.definition.nodes.length + 1) % 2) * 360,
-        y: Math.floor((scoped.definition.nodes.length + 1) / 2) * 210 + 40,
-      },
-    );
-    if (node.kind === "app" && entry.appId)
-      next = {
-        ...next,
-        definition: {
-          ...next.definition,
-          apps: { ...next.definition.apps, [node.app]: { appId: entry.appId } },
-        },
-      };
-    if (node.kind === "map" || node.kind === "repeat")
-      next = {
-        ...next,
-        definition: {
-          ...next.definition,
-          subgraphs: {
-            ...next.definition.subgraphs,
-            [node.body]: {
-              input: {
-                type: "object",
-                properties:
-                  node.kind === "map"
-                    ? { item: {}, index: { type: "integer" } }
-                    : {
-                        item: {},
-                        round: {
-                          type: "integer",
-                          minimum: 0,
-                          maximum: node.maxRounds - 1,
-                        },
-                        previous: { type: "object" },
-                      },
-                required:
-                  node.kind === "map"
-                    ? ["item", "index"]
-                    : ["item", "round", "previous"],
-                additionalProperties: false,
-              },
-              nodes: [],
-              edges: [],
-              output: {},
-            },
-          },
-        },
-      };
-    update(replaceGraphDraft(draft, graphId, next));
-    choose({ graphId, nodeId: node.id });
+    let next = placed.draft;
+    const port = fits?.find((fit) => fit.entry.key === entry.key)?.port;
+    if (search.from && port !== undefined) {
+      const wired = connect(next, searchCatalog, search.from, {
+        node: placed.node.id,
+        port,
+      });
+      if (wired.ok) next = wired.draft;
+    }
+    update(replaceGraphDraft(draft, "root", next));
+    closeSearch();
+    choose({ graphId: "root", nodeId: placed.node.id });
   };
-  const shown = entries.filter((entry) =>
-    `${document.appDisplay[entry.group]?.displayName ?? entry.group} ${entry.name} ${entry.method ?? ""} ${entry.description}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  const mend = (offer: MismatchOffer) => {
+    update(replaceGraphDraft(draft, "root", offer.draft));
+    setPinIssue(null);
+    focusCanvas();
+  };
   const publish = (runAfterPublish = false) => {
     if (!store.publish || (publicationPaused && !store.checkPublication))
       return;
@@ -431,8 +354,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
           state.confirmPublication(version, draft);
           setAutoRunVersion(runAfterPublish ? version : null);
           // The next step after publishing is running it: show that panel.
-          setPane("run");
-          setReveal((value) => value + 1);
+          setShowRun(true);
+          setView("panel");
           state.refreshHistory();
           state.refreshCatalog();
         },
@@ -465,139 +388,45 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
         if (!controller.signal.aborted) setPublishing(false);
       });
   };
-  const savedLabel = readOnly
-    ? `Version ${String(state.version)} · read only${viewedVersion ? ` · ${viewedVersion.commit.slice(0, 7)}` : ""}`
-    : document.durability === "memory"
-      ? "Unsaved · this window only"
-      : issues.length && state.draft !== state.document?.draft
-        ? "Not saved · fix issues"
-        : state.saving
-          ? "Saving…"
-          : state.error ||
-              state.conflict ||
-              state.draft !== state.document?.draft
-            ? "Not saved"
-            : "Saved";
-  const publishDisabled =
-    publishing ||
-    (!publicationPaused &&
-      (state.saving ||
-        state.conflict ||
-        !!state.error ||
-        catalogUnavailable ||
-        issues.length > 0 ||
-        state.draft !== state.document?.draft));
-  const validLabel = state.catalogLoading
-    ? "Loading Apps…"
-    : state.catalogError
-      ? "Not checked"
-      : issues.length
-        ? `${String(issues.length)} issues`
-        : "Valid";
-  // Hide only healthy, settled labels. Pending/unsaved/error states retain
-  // visible explanations rather than reducing a refusal to an ambiguous dot.
-  let savedStatus: NonNullable<ChromeParts["status"]>[number] = {
-    id: "saved",
-    label: savedLabel,
-    tone: savedLabel === "Saved" ? "success" : "neutral",
-  };
-  if (savedLabel === "Saved")
-    savedStatus = { ...savedStatus, presentation: "bead" };
-  let validStatus: NonNullable<ChromeParts["status"]>[number] = {
-    id: "valid",
-    label: validLabel,
-    tone: catalogUnavailable ? "neutral" : issues.length ? "error" : "success",
-  };
-  if (validLabel === "Valid")
-    validStatus = { ...validStatus, presentation: "bead" };
-  const commands: NonNullable<ChromeParts["primary"]> = [
-    ...(runPanel
-      ? [
-          {
-            id: "run",
-            label: "Run",
-            variant:
-              runVersion === undefined
-                ? ("ghost" as const)
-                : unchangedPublished || readOnly
-                  ? ("primary" as const)
-                  : ("outline" as const),
-            disabled: runVersion === undefined,
-            run: () => {
-              setAutoRunVersion(null);
-              setPane("run");
-              setReveal((value) => value + 1);
-            },
-          },
-        ]
-      : []),
-    ...(readOnly && store.restore
-      ? [
-          {
-            id: "restore",
-            label: "Restore as draft",
-            variant: "primary" as const,
-            disabled: state.saving || state.restoring || state.conflict,
-            run: () => {
-              setConfirmRestore(true);
-            },
-          },
-        ]
-      : store.publish && !readOnly
-        ? [
-            {
-              id: "publish",
-              label: publishing
-                ? "Publishing…"
-                : publicationPaused
-                  ? "Check status"
-                  : publishError
-                    ? "Try again"
-                    : "Publish",
-              variant: unchangedPublished
-                ? ("ghost" as const)
-                : runPanel
-                  ? ("outline" as const)
-                  : ("primary" as const),
-              disabled: publishDisabled,
-              run: () => {
-                publish();
-              },
-            },
-            ...(runPanel && !unchangedPublished
-              ? [
-                  {
-                    id: "publish-run",
-                    label: publishing
-                      ? "Publishing & running…"
-                      : "Publish & run",
-                    variant: "primary" as const,
-                    disabled: publishDisabled,
-                    run: () => {
-                      publish(true);
-                    },
-                  },
-                ]
-              : []),
-          ]
-        : []),
-  ];
-  const primaryId = readOnly
-    ? runPanel
-      ? "run"
-      : "restore"
-    : runPanel
-      ? unchangedPublished || !store.publish
-        ? "run"
-        : "publish-run"
-      : "publish";
   const chromeParts: ChromeParts = {
     ...navigation,
-    primary: commands.filter((command) => command.id === primaryId),
-    menu: commands.filter((command) => command.id !== primaryId),
-    status: [savedStatus, validStatus],
+    ...editorChrome(
+      {
+        version: state.version,
+        commit: viewedVersion?.commit,
+        unchangedPublished,
+        durability: document.durability,
+        unsaved: state.draft !== state.document?.draft,
+        saving: state.saving,
+        conflict: state.conflict,
+        saveFailed: state.error !== null,
+        catalogLoading: state.catalogLoading,
+        catalogFailed: state.catalogError !== null,
+        problems: issues.length,
+        publishing,
+        publicationPaused,
+        publishFailed: publishError !== null,
+        restoring: state.restoring,
+        runnable: runVersion !== undefined,
+        hasRunPanel: runPanel !== undefined,
+        canPublish: store.publish !== undefined,
+        canRestore: store.restore !== undefined,
+      },
+      {
+        run: () => {
+          setAutoRunVersion(null);
+          setShowRun(true);
+          setView("panel");
+        },
+        restore: () => {
+          setConfirmRestore(true);
+        },
+        publish,
+      },
+    ),
   };
   const notes = [
+    state.catalogError !== null,
     state.historyError,
     state.restoreNotice,
     state.restoreError,
@@ -606,12 +435,33 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
     confirmRestore,
     runPanel !== undefined && runVersion === undefined,
   ].some(Boolean);
+  const searchStatus =
+    searchNote ??
+    (search?.from && !fits
+      ? pinCatalogFailed
+        ? "These Apps' steps could not be checked against this pin."
+        : "Checking which steps fit…"
+      : state.catalogError !== null
+        ? "Some Apps' steps are not loaded."
+        : undefined);
   return (
-    <main className="wf-editor" data-mode="build" data-pane={pane}>
+    <main className="wf-editor" data-mode="build" data-view={view} ref={root}>
       <CatalogLoadingProvider value={state.catalogLoading}>
         <ChromeSlot active={active} parts={chromeParts} />
         {notes ? (
           <header className="wf-bar">
+            {state.catalogError !== null ? (
+              <p role="alert" className="wf-bar-note">
+                App catalog could not be loaded. Your draft is still available.
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={state.refreshCatalog}
+                >
+                  Retry catalog
+                </Button>
+              </p>
+            ) : null}
             {state.historyError ? (
               <p role="alert" className="wf-bar-note">
                 Version history could not be loaded.
@@ -676,192 +526,88 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
             ) : null}
           </header>
         ) : null}
-        <EditorPanes
-          active={active}
-          pane={pane}
-          reveal={reveal}
-          paletteInitiallyCollapsed={draft.definition.nodes.length > 0}
-          palette={
-            <nav className="wf-pane-body" aria-label="Node palette">
-              {state.catalogError ? (
-                <p role="alert">
-                  App catalog could not be loaded. Your draft is still
-                  available.
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={state.refreshCatalog}
-                  >
-                    Retry catalog
-                  </Button>
-                </p>
-              ) : null}
-              <SearchInput
-                aria-label="Find a node"
-                placeholder="Find a method…"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.currentTarget.value);
-                }}
-              />
-              {query.trim() !== "" && shown.length === 0 ? (
-                <div className="grid gap-sm">
-                  <p>
-                    No steps match “{query}”. Try another name or browse the
-                    palette.
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setQuery("");
-                    }}
-                  >
-                    Clear search
-                  </Button>
-                </div>
-              ) : null}
-              {Object.keys(document.palette).length === 0 ? (
-                <p className="wf-muted">
-                  App methods will appear when the installed App catalog is
-                  connected.
-                </p>
-              ) : null}
-              {[...new Set(shown.map((entry) => entry.group))].map((group) => (
-                <Disclosure
-                  key={group}
-                  open={query.trim() !== "" || openGroups.has(group)}
-                  onOpenChange={(open) => {
-                    setOpenGroups((current) => {
-                      const next = new Set(current);
-                      if (open) next.add(group);
-                      else next.delete(group);
-                      return next;
-                    });
-                  }}
-                  summary={
-                    <DataListHeading level={3}>
-                      <span className="flex items-center gap-xs">
-                        {document.appDisplay[group] ? (
-                          <WorkflowMark
-                            appIcon={document.appDisplay[group].icon}
-                            appName={document.appDisplay[group].displayName}
-                            kind="app"
-                          />
-                        ) : null}
-                        {document.appDisplay[group]?.displayName ?? group}
-                      </span>
-                    </DataListHeading>
-                  }
-                >
-                  <DataList density="compact">
-                    {shown
-                      .filter((entry) => entry.group === group)
-                      .map((entry) => (
-                        <DataRow key={entry.key} className="block">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="wf-palette-entry h-auto w-full min-w-0 cursor-grab items-start justify-start gap-xs whitespace-normal text-start"
-                            disabled={readOnly}
-                            draggable={!readOnly}
-                            onDragStart={(event) => {
-                              event.dataTransfer.setData(
-                                "application/x-fungi-node",
-                                entry.key,
-                              );
-                            }}
-                            onClick={() => {
-                              add(entry.key);
-                            }}
-                          >
-                            <WorkflowMark
-                              appIcon={
-                                entry.appId
-                                  ? document.appDisplay[entry.appId]?.icon
-                                  : undefined
-                              }
-                              appName={
-                                document.appDisplay[entry.group]?.displayName ??
-                                entry.group
-                              }
-                              kind={entry.appId ? "app" : entry.key}
-                            />
-                            <span className="grid min-w-0 gap-2xs">
-                              <span>{entry.name}</span>
-                              {entry.method === null ? (
-                                <span
-                                  className="wf-muted line-clamp-2 font-normal"
-                                  title={entry.description}
-                                >
-                                  {entry.description}
-                                </span>
-                              ) : null}
-                            </span>
-                          </Button>
-                          {entry.method !== null ? (
-                            <MethodDetails
-                              method={entry.method}
-                              description={entry.description}
-                            />
-                          ) : null}
-                        </DataRow>
-                      ))}
-                  </DataList>
-                </Disclosure>
-              ))}
-            </nav>
+        <EditorLayout
+          view={view}
+          onView={setView}
+          panelLabel={
+            showRun && runPanel
+              ? "Run workflow"
+              : selected
+                ? "Step"
+                : "Workflow"
           }
           canvas={
-            <WorkflowCanvas
-              key={state.version ?? "draft"}
-              readOnly={readOnly}
-              draft={draft}
-              catalog={catalog}
-              appDisplay={document.appDisplay}
-              issues={issues}
-              selected={selected}
-              onSelect={choose}
-              onMove={(id, position) => {
-                if (readOnly) return;
-                state.setDraft((current) =>
-                  current
-                    ? {
-                        ...current,
-                        layout: { ...current.layout, [id]: position },
-                      }
-                    : current,
-                );
-              }}
-              onConnect={(from, to) => {
-                connectPorts("root", from, to);
-              }}
-              onRemove={(nodeId) => {
-                remove({ graphId: "root", nodeId });
-              }}
-              onDisconnect={(index) => {
-                if (readOnly) return;
-                const removed = draft.definition.edges[index];
-                state.setDraft((current) =>
-                  current
-                    ? {
-                        ...current,
-                        definition: {
-                          ...current.definition,
-                          edges: current.definition.edges.filter(
-                            (edge) => edge !== removed,
-                          ),
-                        },
-                      }
-                    : current,
-                );
-              }}
-              onDrop={(key, point) => {
-                add(key, flow.screenToFlowPosition(point));
-              }}
-            />
+            <>
+              <WorkflowCanvas
+                key={state.version ?? "draft"}
+                readOnly={readOnly}
+                draft={draft}
+                catalog={catalog}
+                appDisplay={document.appDisplay}
+                issues={issues}
+                selected={selected}
+                onSelect={choose}
+                onMove={(id, position) => {
+                  if (readOnly) return;
+                  state.setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          layout: { ...current.layout, [id]: position },
+                        }
+                      : current,
+                  );
+                }}
+                onConnect={(from, to) => {
+                  connectPorts("root", from, to);
+                }}
+                onRemove={(nodeId) => {
+                  remove({ graphId: "root", nodeId });
+                }}
+                onDisconnect={(index) => {
+                  if (readOnly) return;
+                  const removed = draft.definition.edges[index];
+                  state.setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          definition: {
+                            ...current.definition,
+                            edges: current.definition.edges.filter(
+                              (edge) => edge !== removed,
+                            ),
+                          },
+                        }
+                      : current,
+                  );
+                }}
+                onSearch={(point) => {
+                  openSearch({ point });
+                }}
+                onPinRelease={(from, point) => {
+                  openSearch({ point, from });
+                }}
+                onPinMismatch={refuse}
+              />
+              {readOnly ? null : (
+                <Button
+                  className="wf-add-step"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    openSearch({ point: centre() });
+                  }}
+                >
+                  Add a step
+                </Button>
+              )}
+              {!readOnly && draft.definition.nodes.length === 0 ? (
+                <p className="wf-empty-hint">Press Tab to add a step</p>
+              ) : null}
+            </>
           }
-          inspector={
-            pane === "run" && runPanel ? (
+          panel={
+            showRun && runPanel ? (
               <div className="wf-pane-body">
                 {runPanel(runVersion, runVersion === autoRunVersion)}
               </div>
@@ -890,17 +636,39 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
             )
           }
         />
-        {refusal || state.error || state.conflict ? (
+        {search ? (
+          <StepSearch
+            at={search.point.client}
+            entries={entries}
+            display={document.appDisplay}
+            fits={search.from ? (fits ?? []) : undefined}
+            status={searchStatus}
+            onChoose={addStep}
+            onClose={closeSearch}
+          />
+        ) : null}
+        {pinIssue ? (
+          <PinMismatch
+            at={pinIssue.point.client}
+            message={pinIssue.message}
+            offers={pinIssue.offers}
+            onOffer={mend}
+            onClose={() => {
+              setPinIssue(null);
+              focusCanvas();
+            }}
+          />
+        ) : null}
+        {state.error || state.conflict ? (
           <Surface
             role="alert"
             placement="embedded"
             size="sm"
             className="wf-refusal"
           >
-            {refusal ??
-              (state.conflict
-                ? "This draft changed elsewhere. Your edits are still in this window; discard your local edits to open the latest draft."
-                : "Draft could not be saved. Your edits remain in this window.")}
+            {state.conflict
+              ? "This draft changed elsewhere. Your edits are still in this window; discard your local edits to open the latest draft."
+              : "Draft could not be saved. Your edits remain in this window."}
             {state.conflict ? (
               <Button
                 variant="ghost"
@@ -918,26 +686,6 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
         ) : null}
       </CatalogLoadingProvider>
     </main>
-  );
-}
-function MethodDetails({
-  method,
-  description,
-}: {
-  method: string;
-  description: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Disclosure
-      size="row"
-      summary="Method details"
-      open={open}
-      onOpenChange={setOpen}
-    >
-      <p className="text-xs">{description}</p>
-      <code className="text-xs">{method}</code>
-    </Disclosure>
   );
 }
 

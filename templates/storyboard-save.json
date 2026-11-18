@@ -360,7 +360,7 @@
         "title": "Clone the repository",
         "app": "shed",
         "method": "run",
-        "methodDigest": "sha256:9ad1927eb97e56bbcb57061652fc54c107ced496bef58c96b17f2c997db7355c",
+        "methodDigest": "sha256:3fe3107cb8c9284ba26f1b292bf40c366ea6f456bebc838ebb7489f00801641e",
         "values": {
           "command": {
             "from": {
@@ -539,7 +539,7 @@
         "title": "Commit and push",
         "app": "shed",
         "method": "run",
-        "methodDigest": "sha256:9ad1927eb97e56bbcb57061652fc54c107ced496bef58c96b17f2c997db7355c",
+        "methodDigest": "sha256:3fe3107cb8c9284ba26f1b292bf40c366ea6f456bebc838ebb7489f00801641e",
         "values": {
           "command": {
             "from": {
