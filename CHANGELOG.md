@@ -1,5 +1,13 @@
 # @fungi.computer/trellis
 
+## 0.23.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.12.2
+  - @fungi.computer/shiitake-extensions@0.11.15
+
 ## 0.23.3
 
 ### Patch Changes
