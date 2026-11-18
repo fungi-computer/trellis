@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
 import type { WorkflowClient } from "../workflow-client.js";
 import { terminal, type RunStatus } from "./run-state.js";
-/** Schedule the next read after this one settles; never overlap reads. */
-export function useRun(client: WorkflowClient, runId: string) {
+/**
+ * Schedule the next read after this one settles; never overlap reads. A null
+ * `runId` or no client reads nothing: the editor has no test run until one starts.
+ */
+export function useRun(
+  client: WorkflowClient | undefined,
+  runId: string | null,
+) {
   const [run, setRun] = useState<RunStatus | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -11,9 +17,12 @@ export function useRun(client: WorkflowClient, runId: string) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     setRun(null);
     setError(false);
+    if (client === undefined || runId === null) return;
+    const reader = client;
+    const id = runId;
     async function read() {
       try {
-        const next = await client.runStatus(runId);
+        const next = await reader.runStatus(id);
         if (!active) return;
         setRun(next);
         setError(false);

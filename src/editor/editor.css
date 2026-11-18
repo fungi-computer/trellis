@@ -37,6 +37,53 @@
   flex: 1 1 auto;
   font-weight: 600;
 }
+.wf-step-head {
+  display: grid;
+  gap: var(--spacing-2xs);
+}
+.wf-step-name {
+  font-weight: 600;
+  font-size: var(--text-lg);
+}
+.wf-step-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.wf-step-meta {
+  flex: 1 1 auto;
+}
+.wf-retry {
+  display: flex;
+  gap: var(--spacing-2xs);
+}
+.wf-wired {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+}
+.wf-wired-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+}
+/* A problem sits on its field: a pink-red outline, and its words below. */
+.wf-step-panel [data-problem] {
+  outline: 2px solid var(--color-error);
+  outline-offset: 3px;
+  border-radius: var(--radius-field, 0.375rem);
+}
+.wf-step-problem {
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
 .wf-canvas {
   position: relative;
   min-height: 0;
@@ -362,4 +409,43 @@
 }
 .wf-pane-body .caps-card-outline > * {
   padding-inline: 0;
+}
+
+/* The test, above the step's fields: its line, the write-step confirm, any review, and Input/Output. */
+.wf-test {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding-block-end: var(--spacing-md);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+.wf-test .wf-dock {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-md);
+}
+.wf-test-line {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-weight: 600;
+}
+.wf-test-confirm ul {
+  margin-block: var(--spacing-xs);
+  padding-inline-start: var(--spacing-lg);
+}
+.wf-test-io h3 {
+  font-size: inherit;
+  font-weight: 600;
+}
+.wf-test-io dt {
+  font-weight: 600;
+}
+.wf-test-io dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.wf-test-json {
+  max-height: 16rem;
+  overflow: auto;
+  font-size: var(--text-xs);
 }

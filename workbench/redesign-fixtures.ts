@@ -838,3 +838,16 @@ export const scene = {
   repository: "field-notes",
   agent: "Moss",
 } as const;
+
+/** Hero B with its last step's path taken away: the one problem screen 09 draws. */
+export const weeklyCoverNoPath: Draft = {
+  ...weeklyCover,
+  definition: {
+    ...weeklyCoverDefinition,
+    nodes: weeklyCoverDefinition.nodes.map((node) =>
+      node.id === "save" && node.kind === "app"
+        ? { ...node, values: {} }
+        : node,
+    ),
+  },
+};

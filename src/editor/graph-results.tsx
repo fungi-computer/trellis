@@ -14,6 +14,19 @@ export function nodeResultsFor(
   );
 }
 
+/** A step's results in the graph being shown: root results carry no graph id, a loop body's carry its own. */
+export function nodeResultsIn(
+  results: readonly RunStep[],
+  graphId: string,
+  nodeId: string,
+) {
+  return nodeResultsFor(
+    results,
+    nodeId,
+    graphId === "root" ? undefined : graphId,
+  );
+}
+
 /** How many of a loop's recorded iterations have finished; nothing before any ran. */
 export function iterationProgress(results: readonly RunStep[]) {
   return results.length

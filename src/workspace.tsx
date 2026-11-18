@@ -498,6 +498,8 @@ export function WorkflowWorkspace({
             key={editorWorkflowId}
             store={store}
             active={editing}
+            test={{ client, workflowId: editorWorkflowId }}
+            {...(readMedia ? { readMedia } : {})}
             runPanel={(version, autoRun = false) => (
               <RunWorkflow
                 key={version}

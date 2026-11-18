@@ -31,11 +31,16 @@ export type EditorChromeState = Readonly<{
   hasRunPanel: boolean;
   canPublish: boolean;
   canRestore: boolean;
+  /** This host can test a draft; where it cannot, there is no Test command. */
+  testable: boolean;
+  /** A test is starting. */
+  testStarting: boolean;
 }>;
 
 export type EditorChromeActions = Readonly<{
   run: () => void;
   restore: () => void;
+  testWorkflow: () => void;
   publish: (runAfter: boolean) => void;
 }>;
 
@@ -92,6 +97,26 @@ export function editorChrome(
                 : ("outline" as const),
             disabled: !state.runnable,
             run: actions.run,
+          },
+        ]
+      : []),
+    ...(state.testable && !readOnly
+      ? [
+          {
+            id: "test",
+            label: state.testStarting ? "Testing…" : "Test workflow",
+            variant: "outline" as const,
+            // A test runs the saved draft: wait for what is on screen to be saved.
+            disabled:
+              state.testStarting ||
+              state.unsaved ||
+              state.saving ||
+              state.conflict ||
+              state.saveFailed ||
+              state.catalogLoading ||
+              state.catalogFailed ||
+              state.problems > 0,
+            run: actions.testWorkflow,
           },
         ]
       : []),

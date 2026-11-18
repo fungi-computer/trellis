@@ -1,7 +1,7 @@
 import { stepFollower } from "./follow-step.js";
 import { useCatalogLoading } from "./catalog-loading.js";
 import * as S from "effect/Schema";
-import { GraphResults, nodeResultsFor } from "./graph-results.js";
+import { GraphResults, nodeResultsIn } from "./graph-results.js";
 import {
   FrameCard,
   framedSteps,
@@ -557,13 +557,13 @@ export function WorkflowCanvas({
         state:
           node.id === "$input"
             ? undefined
-            : (nodeResultsFor(nodeResults, node.id).at(-1)?.state ??
+            : (nodeResultsIn(nodeResults, graphId, node.id).at(-1)?.state ??
               nodeStates?.[node.id]),
         lastRun:
           node.id !== "$input" &&
-          nodeResultsFor(nodeResults, node.id).length === 0 &&
+          nodeResultsIn(nodeResults, graphId, node.id).length === 0 &&
           nodeStates?.[node.id] !== undefined,
-        results: nodeResultsFor(nodeResults, node.id),
+        results: nodeResultsIn(nodeResults, graphId, node.id),
         readMedia,
         title: node.title,
         meta: node.meta,

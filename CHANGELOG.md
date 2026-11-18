@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.21.0
+
+### Minor Changes
+
+- Changes since 0.20.0:
+
+  - fix(trellis): show a test's results only in the graph they ran in
+  - feat(trellis): show what a tested step was given and draw the test-step
+    story
+  - feat(trellis): run a test of the draft from the editor header over testDraft
+  - feat(trellis): add the step panel with named steps, retry, field problems
+    and wired chips
+
 ## 0.20.0
 
 ### Minor Changes

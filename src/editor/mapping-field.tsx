@@ -23,6 +23,7 @@ import {
   type PortRef,
 } from "@fungi.computer/braid";
 import { JsonField, ValueField } from "./value-field.js";
+import { pinWords, valuePinToken } from "./pins.js";
 
 const fieldName = (key: string) => {
   const words = key
@@ -30,12 +31,57 @@ const fieldName = (key: string) => {
     .replace(/[_-]+/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
+const defaultSourceName = (source: PortRef) =>
+  `${source.node} · ${source.port}`;
 const itemName = (name: string) =>
   name.endsWith("ies")
     ? `${name.slice(0, -3)}y`
     : name.endsWith("s") && !name.endsWith("ss")
       ? name.slice(0, -1)
       : name;
+
+/** The value a pin holds once its wire is cut: what the form would start with. */
+const unlinked = (schema: PortSchema): Mapping => ({
+  literal: schema.default ?? (schema.type === "string" ? "" : null),
+});
+
+/** A wired input in words: the pin's colour, where it comes from, and a way to cut it. */
+function WiredChip({
+  name,
+  schema,
+  from,
+  sourceName,
+  onUnlink,
+}: {
+  name: string;
+  schema: PortSchema;
+  from: PortRef;
+  sourceName: (source: PortRef) => string;
+  onUnlink: () => void;
+}) {
+  const token = valuePinToken(schema);
+  return (
+    <div className="wf-wired">
+      <span className="wf-wired-chip" data-pin={token}>
+        <span
+          className="wf-legend-dot"
+          data-pin={token}
+          role="img"
+          aria-label={pinWords[token]}
+        />
+        from {sourceName(from)}
+      </span>
+      <Button
+        size="xs"
+        variant="ghost"
+        aria-label={`Unlink ${name}`}
+        onClick={onUnlink}
+      >
+        Unlink
+      </Button>
+    </div>
+  );
+}
 
 /** Typed graph mappings composed with the ordinary Caps form controls. */
 export function MappingField({
@@ -46,6 +92,7 @@ export function MappingField({
   onChange,
   jsonFallback = true,
   onRemove,
+  sourceName = defaultSourceName,
 }: {
   label: string;
   schema: PortSchema;
@@ -54,6 +101,8 @@ export function MappingField({
   onChange: (value: Mapping) => void;
   jsonFallback?: boolean;
   onRemove?: () => void;
+  /** How a wire's source reads in the chip, such as `Cover prompt · prompt`. */
+  sourceName?: (source: PortRef) => string;
 }) {
   const id = useId();
   const [json, setJson] = useState(false);
@@ -196,6 +245,15 @@ export function MappingField({
       </>
     ) : value && "from" in value ? (
       <div className="grid gap-sm">
+        <WiredChip
+          name={name}
+          schema={schema}
+          from={value.from}
+          sourceName={sourceName}
+          onUnlink={() => {
+            onChange(unlinked(schema));
+          }}
+        />
         <Field label="Output" description={schema.description}>
           <Select
             aria-label={`${name} output`}
@@ -213,7 +271,7 @@ export function MappingField({
                 key={`${source.node}.${source.port}`}
                 value={`${source.node}.${source.port}`}
               >
-                {source.node} · {source.port}
+                {sourceName(source)}
               </option>
             ))}
           </Select>
@@ -299,10 +357,7 @@ export function MappingField({
                   });
                   break;
                 default:
-                  onChange({
-                    literal:
-                      schema.default ?? (schema.type === "string" ? "" : null),
-                  });
+                  onChange(unlinked(schema));
               }
             }}
           >

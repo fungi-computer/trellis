@@ -1,4 +1,3 @@
-import { Button } from "@fungi.computer/caps/components/button";
 import { Field } from "@fungi.computer/caps/components/field";
 import { Input } from "@fungi.computer/caps/components/input";
 import { Select } from "@fungi.computer/caps/components/select";
@@ -23,6 +22,12 @@ import { methodFor, nodePorts } from "./graph.js";
 import { TriggerFields } from "./trigger-fields.js";
 import { InputFields, MappedOutputs } from "./input-fields.js";
 import { CodeFields } from "./code-node.js";
+import { StepPanel } from "./step-panel.js";
+import {
+  inputTitle,
+  nodePresentation,
+  nodeProblem,
+} from "./graph-presentation.js";
 
 import {
   graphDraft,
@@ -148,14 +153,6 @@ function ScopedInspector({
             onChange({ ...draft, definition });
           }}
         />
-        <ul aria-label="Workflow issues">
-          {issues.map((issue, index) => (
-            <li key={index}>
-              {issue.node ? `${issue.node}: ` : ""}
-              {issue.message}
-            </li>
-          ))}
-        </ul>
       </div>
     );
   const sources = [
@@ -171,11 +168,41 @@ function ScopedInspector({
   const inputs = method
     ? methodInputPorts(parseProjection(method.input))
     : undefined;
+  const names = appDisplay ?? {};
+  const titleOf = (step: Node) =>
+    nodePresentation(draft.definition, catalog, step, names).title;
+  const sourceName = (source: PortRef) => {
+    const from = draft.definition.nodes.find((item) => item.id === source.node);
+    return `${from ? titleOf(from) : source.node === "$input" ? inputTitle : source.node} · ${source.port}`;
+  };
+  const own = issues.filter((issue) => issue.node === node.id);
+  const fieldPorts = new Set<string>(
+    node.kind === "app" && inputs
+      ? Object.keys(ports(inputs))
+      : node.kind === "review"
+        ? ["show"]
+        : [],
+  );
+  /** A field's problem in the words of its status line: "Needs a path". */
+  const problemOn = (port: string) => {
+    const issue = own.find((item) => item.port === port);
+    return issue ? nodeProblem([issue], node.id)?.words : undefined;
+  };
+  const presentation = nodePresentation(draft.definition, catalog, node, names);
   return (
-    <div className="wf-pane-body">
-      <h2 className="wf-inspector-title">
-        {node.kind === "app" ? `${node.app} · ${node.method}` : node.kind}
-      </h2>
+    <StepPanel
+      node={node}
+      defaultTitle={presentation.title}
+      meta={presentation.meta}
+      problemCount={own.length}
+      loose={own.filter(
+        (issue) => issue.port === undefined || !fieldPorts.has(issue.port),
+      )}
+      onChange={update}
+      onRemove={() => {
+        onRemove(node.id);
+      }}
+    >
       {method ? (
         <p className="wf-muted">
           {method.description} · {method.effect} ·{" "}
@@ -194,79 +221,72 @@ function ScopedInspector({
           const value = Object.hasOwn(node.values, port)
             ? node.values[port]
             : undefined;
+          const problem = problemOn(port);
           return (
-            <Field
-              key={port}
-              required={inputs.required?.includes(port)}
-              error={
-                issues.find(
-                  (issue) => issue.node === node.id && issue.port === port,
-                )?.message
-              }
-            >
-              <MappingField
-                key={`${node.id}.${port}`}
-                label={port}
-                schema={schema}
-                value={feed ? { from: feed.from } : value}
-                sources={sources}
-                onChange={(next) => {
-                  onChange({
-                    ...draft,
-                    definition: {
-                      ...draft.definition,
-                      edges: draft.definition.edges.filter(
-                        (edge) => edge !== feed,
-                      ),
-                      nodes: draft.definition.nodes.map((item) =>
-                        item.id === node.id
-                          ? {
-                              ...node,
-                              values: { ...node.values, [port]: next },
-                            }
-                          : item,
-                      ),
-                    },
-                  });
-                }}
-              />
-            </Field>
+            <div key={port} data-problem={problem ? true : undefined}>
+              <Field required={inputs.required?.includes(port)} error={problem}>
+                <MappingField
+                  key={`${node.id}.${port}`}
+                  label={port}
+                  schema={schema}
+                  value={feed ? { from: feed.from } : value}
+                  sources={sources}
+                  sourceName={sourceName}
+                  onChange={(next) => {
+                    onChange({
+                      ...draft,
+                      definition: {
+                        ...draft.definition,
+                        edges: draft.definition.edges.filter(
+                          (edge) => edge !== feed,
+                        ),
+                        nodes: draft.definition.nodes.map((item) =>
+                          item.id === node.id
+                            ? {
+                                ...node,
+                                values: { ...node.values, [port]: next },
+                              }
+                            : item,
+                        ),
+                      },
+                    });
+                  }}
+                />
+              </Field>
+            </div>
           );
         })
       ) : node.kind === "review" ? (
         <>
-          <Field label="Question">
-            <Input
-              value={node.title}
-              onChange={(event) => {
-                update({ ...node, title: event.currentTarget.value });
-              }}
-            />
-          </Field>
-          <Field label="Show for review">
-            <Select
-              value={
-                node.show[0] ? `${node.show[0].node}.${node.show[0].port}` : ""
-              }
-              onChange={(event) => {
-                const source = sources.find(
-                  (ref) =>
-                    `${ref.node}.${ref.port}` === event.currentTarget.value,
-                );
-                if (source) onConnect(source, { node: node.id, port: "show" });
-              }}
-            >
-              <option value="">Choose an output…</option>
-              {sources.map((ref) => (
-                <option
-                  key={`${ref.node}.${ref.port}`}
-                  value={`${ref.node}.${ref.port}`}
-                >
-                  {ref.node} · {ref.port}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div data-problem={problemOn("show") ? true : undefined}>
+            <Field label="Show for review" error={problemOn("show")}>
+              <Select
+                value={
+                  node.show[0]
+                    ? `${node.show[0].node}.${node.show[0].port}`
+                    : ""
+                }
+                onChange={(event) => {
+                  const source = sources.find(
+                    (ref) =>
+                      `${ref.node}.${ref.port}` === event.currentTarget.value,
+                  );
+                  if (source)
+                    onConnect(source, { node: node.id, port: "show" });
+                }}
+              >
+                <option value="">Choose an output…</option>
+                {sources.map((ref) => (
+                  <option
+                    key={`${ref.node}.${ref.port}`}
+                    value={`${ref.node}.${ref.port}`}
+                  >
+                    {ref.node} · {ref.port}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
           <JsonField
             label="Review choices"
             value={node.choices ?? []}
@@ -347,22 +367,7 @@ function ScopedInspector({
           }}
         />
       ) : null}
-      <ul aria-label="Node issues">
-        {issues
-          .filter((issue) => issue.node === node.id)
-          .map((issue, index) => (
-            <li key={index}>{issue.message}</li>
-          ))}
-      </ul>
-      <Button
-        variant="ghost"
-        onClick={() => {
-          onRemove(node.id);
-        }}
-      >
-        Remove node
-      </Button>
-    </div>
+    </StepPanel>
   );
 }
 

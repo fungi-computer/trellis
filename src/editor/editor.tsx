@@ -38,6 +38,9 @@ import {
 } from "./draft-store.js";
 import { EditorLayout, type EditorView } from "./editor-layout.js";
 import { editorChrome } from "./editor-chrome.js";
+import { TestRunPanel } from "./test-run.js";
+import { useTestRun, type TestTarget } from "./use-test-run.js";
+import type { ReadMedia } from "../runs/output-preview.js";
 import { PinMismatch, StepSearch } from "./step-search.js";
 import {
   fitsPin,
@@ -57,6 +60,9 @@ export type WorkflowEditorProps = {
   runPanel?: (version: number | undefined, autoRun?: boolean) => ReactNode;
   /** Only the editor on screen adds its crumbs and commands to the header. */
   active: boolean;
+  /** Where "Test workflow" runs the saved draft; without it there is no Test. */
+  test?: TestTarget;
+  readMedia?: ReadMedia;
 };
 /** Adds the editor's version crumb, commands and status to the header. */
 function ChromeSlot({
@@ -77,8 +83,19 @@ type PinIssue = Readonly<{
   message: string;
   offers: readonly MismatchOffer[];
 }>;
-function Editor({ store, runPanel, active }: WorkflowEditorProps) {
+function Editor({
+  store,
+  runPanel,
+  active,
+  test: testTarget,
+  readMedia,
+}: WorkflowEditorProps) {
   const state = useDraft(store);
+  const test = useTestRun({
+    target: testTarget,
+    definition: state.document?.draft.definition,
+    revision: state.document?.revision,
+  });
   const runHintId = useId();
   const [publishing, setPublishing] = useState(false);
   const publication = useRef<AbortController | null>(null);
@@ -431,6 +448,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
         hasRunPanel: runPanel !== undefined,
         canPublish: store.publish !== undefined,
         canRestore: store.restore !== undefined,
+        testable: test.available,
+        testStarting: test.phase === "starting",
       },
       {
         run: () => {
@@ -440,6 +459,11 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
         },
         restore: () => {
           setConfirmRestore(true);
+        },
+        testWorkflow: () => {
+          setShowRun(false);
+          setView("panel");
+          test.testWorkflow();
         },
         publish,
       },
@@ -578,6 +602,8 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 catalog={catalog}
                 appDisplay={document.appDisplay}
                 issues={issuesOfGraph(issues, scope.graphId)}
+                nodeResults={readOnly ? [] : test.steps}
+                readMedia={readMedia}
                 selected={selected}
                 onSelect={choose}
                 onMove={(id, position) => {
@@ -637,27 +663,42 @@ function Editor({ store, runPanel, active }: WorkflowEditorProps) {
                 {runPanel(runVersion, runVersion === autoRunVersion)}
               </div>
             ) : (
-              <FieldSet
-                legend={
-                  <span className="sr-only">
-                    {selected ? "Node" : "Workflow"}
-                  </span>
-                }
-                disabled={readOnly}
-                className="wf-inspector-fields"
-              >
-                <Inspector
-                  key={selected ? JSON.stringify(selected) : "workflow"}
-                  draft={draft}
-                  catalog={catalog}
-                  appDisplay={state.document?.appDisplay ?? document.appDisplay}
-                  selected={selected}
-                  issues={issues}
-                  onChange={update}
-                  onRemove={remove}
-                  onConnect={connectPorts}
-                />
-              </FieldSet>
+              <>
+                {testTarget && test.phase !== "idle" ? (
+                  <TestRunPanel
+                    test={test}
+                    client={testTarget.client}
+                    definition={draft.definition}
+                    catalog={catalog}
+                    appDisplay={document.appDisplay}
+                    selected={selected}
+                    {...(readMedia ? { readMedia } : {})}
+                  />
+                ) : null}
+                <FieldSet
+                  legend={
+                    <span className="sr-only">
+                      {selected ? "Node" : "Workflow"}
+                    </span>
+                  }
+                  disabled={readOnly}
+                  className="wf-inspector-fields"
+                >
+                  <Inspector
+                    key={selected ? JSON.stringify(selected) : "workflow"}
+                    draft={draft}
+                    catalog={catalog}
+                    appDisplay={
+                      state.document?.appDisplay ?? document.appDisplay
+                    }
+                    selected={selected}
+                    issues={issues}
+                    onChange={update}
+                    onRemove={remove}
+                    onConnect={connectPorts}
+                  />
+                </FieldSet>
+              </>
             )
           }
         />
