@@ -449,7 +449,7 @@
             "title": "Animate the panel",
             "app": "prints",
             "method": "generateVideo",
-            "methodDigest": "sha256:405f713d6a23f1a653492f8a727a869523bb47358834cf53238b582f4dbca5dd",
+            "methodDigest": "sha256:05cdbf91e4541c448b89f2c0801207198996741a59a99cc7574b19d8a2b80b0c",
             "values": {
               "settings": {
                 "object": {
@@ -732,7 +732,7 @@
             "title": "Generate the panel",
             "app": "prints",
             "method": "generateImage",
-            "methodDigest": "sha256:72e7935c1cf3c6c252166beef7247a9bf81cfa72e7955c3cc736cc27855ec19f",
+            "methodDigest": "sha256:59d339235cf8b8164b29bbb99cfb574767b697baad84e23564ad171b9df419a9",
             "values": {
               "settings": {
                 "object": {
