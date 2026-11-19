@@ -1,5 +1,11 @@
 # @fungi.computer/trellis
 
+## 0.23.5
+
+### Patch Changes
+
+- @fungi.computer/shiitake-extensions@0.11.16
+
 ## 0.23.4
 
 ### Patch Changes
