@@ -141,6 +141,7 @@ export function WorkflowView({ app }: { app: AppRoot | null }) {
               openIn={openIn}
               browserActions={app.ui}
               permissions={app.ui}
+              notify={app.ui}
               openRequest={openRequest}
               statusApp={app}
             />

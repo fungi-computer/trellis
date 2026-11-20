@@ -1,5 +1,21 @@
 # @fungi.computer/trellis
 
+## 0.24.0
+
+### Minor Changes
+
+- Changes since 0.23.13:
+
+  - fix(trellis): give the Workflows screens a gutter, 32px controls and a
+    centred first run
+  - feat(trellis): open on a Workflows table with a canvas-first first run and
+    template pictures
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.12.3
+
 ## 0.23.13
 
 ### Patch Changes

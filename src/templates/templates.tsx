@@ -1,29 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as S from "effect/Schema";
 import * as z from "zod";
 import { describeAppError } from "@fungi.computer/agar/errors";
-import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import { workflowDefinitionSchema } from "@fungi.computer/braid";
 import { Button } from "@fungi.computer/caps/components/button";
 import { Card, CardContent } from "@fungi.computer/caps/components/card";
 import { Monogram } from "@fungi.computer/caps/components/monogram";
-import { Sigil, type SigilName } from "@fungi.computer/sigils";
+import { Sigil } from "@fungi.computer/sigils";
+import { appMarks } from "./app-marks.js";
 import review from "../../templates/review.json";
 import storyboard from "../../templates/storyboard.json";
 import storyboardSave from "../../templates/storyboard-save.json";
 import bonsaiChecks from "../../templates/bonsai-checks.json";
 import bonsaiBuildOnMerge from "../../templates/bonsai-build-on-merge.json";
 import { templateDefinition } from "./template-draft.js";
+import { MiniCanvas } from "./mini-canvas.js";
 import { definitionAppIds } from "../../backend/catalog.js";
 import type { WorkflowClient } from "../workflow-client.js";
-// Presentation for the Apps required by these bundled templates, independent
-// of whether the current Team has installed or granted them yet.
-const requiredApps = new Map<string, { name: string; icon: SigilName }>([
-  ["app_prints", { name: "Prints", icon: "prints" }],
-  ["app_bonsai", { name: "Bonsai", icon: "bonsai" }],
-  ["app_shed", { name: "Shed", icon: "computer" }],
-  ["app_inkcap", { name: "Inkcap", icon: "inkcap" }],
-]);
 const templates = [
   review,
   storyboard,
@@ -34,17 +27,12 @@ const templates = [
   ...item,
   definition: S.decodeUnknownSync(workflowDefinitionSchema)(item.definition),
 }));
-export type BundledTemplate = (typeof templates)[number];
-
-/** The three friendliest templates, offered one click away on the welcome. */
-export const starterTemplates = ["review", "storyboard", "bonsai-checks"]
-  .flatMap((id) => templates.filter((template) => template.id === id))
-  .slice(0, 3);
+type BundledTemplate = (typeof templates)[number];
 
 const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
 
 /** Why a template could not become a draft, in the words of its real cause. */
-export function templateFailure(cause: unknown): string {
+function templateFailure(cause: unknown): string {
   if (capabilityDenied.safeParse(cause).success)
     return "Trellis needs Git access to save this workflow. Approve it first.";
   // template-draft names the missing App in its own sentence.
@@ -54,7 +42,7 @@ export function templateFailure(cause: unknown): string {
 }
 
 /** Turn one bundled template into a draft against the Apps installed now. */
-export async function createFromTemplate(
+async function createFromTemplate(
   client: WorkflowClient,
   template: BundledTemplate,
 ): Promise<string> {
@@ -73,43 +61,79 @@ export async function createFromTemplate(
 export function Templates({
   client,
   onUse,
+  onFail,
   blockedReason,
 }: {
   client: WorkflowClient;
   onUse: (id: string) => void;
+  /** Tell the person why a template could not be used: one toast. */
+  onFail: (message: string) => void;
   /** Why no template can be used yet, such as a missing Git grant. */
   blockedReason?: string | undefined;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<{ id: string; error: Error } | null>(
-    null,
+  // The installed Apps decide which templates are offered; until the answer
+  // arrives, or if it cannot be read, every template shows and Use says why not.
+  const [installed, setInstalled] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    let active = true;
+    client.catalog().then(
+      ({ apps }) => {
+        if (active) setInstalled(new Set(apps.map((app) => app.appId)));
+      },
+      (cause: unknown) => {
+        console.error("The installed Apps could not be read", cause);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [client]);
+  const offered = templates.filter(
+    (template) =>
+      installed === null ||
+      Object.values(template.definition.apps).every((app) =>
+        installed.has(app.appId),
+      ),
   );
+  const hidden = templates.length - offered.length;
   async function useTemplate(template: BundledTemplate) {
     setBusy(true);
-    setFailure(null);
-    try {
-      onUse(await createFromTemplate(client, template));
-    } catch (cause) {
-      setFailure({
-        id: template.id,
-        error: new Error(templateFailure(cause), { cause }),
+    await createFromTemplate(client, template)
+      .then(onUse, (cause: unknown) => {
+        onFail(templateFailure(cause));
+      })
+      .finally(() => {
+        setBusy(false);
       });
-    } finally {
-      setBusy(false);
-    }
   }
   return (
     <main className="wf-page">
+      <h1>Start from a template</h1>
+      <p className="wf-muted">
+        Each one opens on the canvas as a draft. Nothing runs until you switch
+        it on.
+      </p>
       <div className="wf-templates">
-        {templates.map((template) => (
+        {offered.map((template) => (
           <Card key={template.id}>
-            <CardContent className="flex flex-col gap-sm">
+            <CardContent className="wf-template-card">
+              <MiniCanvas
+                graph={template.definition}
+                layout={template.layout}
+                label={`${template.definition.title} as a canvas`}
+              />
               <h2>{template.definition.title}</h2>
-              <p>{template.definition.description}</p>
+              <p
+                className="wf-template-description"
+                title={template.definition.description}
+              >
+                {template.definition.description}
+              </p>
               <div className="wf-actions">
                 {Object.entries(template.definition.apps).map(
                   ([alias, app]) => {
-                    const details = requiredApps.get(app.appId);
+                    const details = appMarks.get(app.appId);
                     return (
                       <span
                         key={app.appId}
@@ -140,19 +164,17 @@ export function Templates({
               {blockedReason !== undefined ? (
                 <p className="wf-muted">{blockedReason}</p>
               ) : null}
-              {failure?.id === template.id ? (
-                <FailureLine
-                  message={failure.error.message}
-                  onRetry={() => void useTemplate(template)}
-                  onDismiss={() => {
-                    setFailure(null);
-                  }}
-                />
-              ) : null}
             </CardContent>
           </Card>
         ))}
       </div>
+      {hidden > 0 ? (
+        <p className="wf-muted">
+          {hidden === 1
+            ? "1 more template needs an App this Team has not installed."
+            : `${String(hidden)} more templates need Apps this Team has not installed.`}
+        </p>
+      ) : null}
     </main>
   );
 }

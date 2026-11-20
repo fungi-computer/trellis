@@ -55,12 +55,12 @@ body,
   margin: 0;
 }
 .wf-page {
-  padding: var(--spacing-md) var(--spacing-xs);
+  padding: var(--spacing-md);
   overflow: auto;
 }
-/* The first tab's label lines up with the window title above it. */
-.wf-sections [role="tab"]:first-child {
-  margin-inline-start: calc(var(--spacing-xs) - var(--spacing-md));
+/* The section tabs share the page's gutter. */
+.wf-sections {
+  padding-inline: var(--spacing-md);
 }
 .wf-invitation {
   width: 100%;
@@ -141,7 +141,8 @@ body,
 /* The result being judged, set as plain readable words (not a code dump). */
 .wf-templates {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 360px));
+  justify-content: start;
   gap: var(--spacing-sm);
 }
 @media (max-width: 720px) {
@@ -213,4 +214,230 @@ body,
   display: inline-flex;
   flex-shrink: 0;
   padding-block-start: var(--spacing-3xs, 2px);
+}
+
+/* Workflows home: one 32px row per workflow. */
+.wf-home {
+  container-type: inline-size;
+}
+.wf-home-header {
+  display: grid;
+  grid-template-areas: "title search filters new";
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem) auto auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-block-end: var(--spacing-md);
+}
+.wf-home-title {
+  grid-area: title;
+}
+.wf-home-header .caps-search-input {
+  grid-area: search;
+}
+.wf-home-filters {
+  grid-area: filters;
+  min-width: 0;
+}
+.wf-home-new {
+  grid-area: new;
+}
+/* Every control in the header is as tall as a row. */
+.wf-home-header .input,
+.wf-home-header .btn {
+  height: 2rem;
+  min-height: 2rem;
+}
+.wf-home-filters [role="tablist"] {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.wf-home-title h1 {
+  margin-bottom: 0;
+}
+.wf-home-header [role="tablist"] {
+  --tab-height: 2rem;
+}
+.wf-home-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+.wf-home-table th,
+.wf-home-table td {
+  height: 2rem;
+  padding: 0 var(--spacing-xs);
+  text-align: start;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 24rem;
+  border-block-end: 1px solid color-mix(in oklab, currentColor 12%, transparent);
+}
+.wf-home-table thead th {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.wf-home-table tbody th {
+  font-weight: 600;
+}
+.wf-home-name {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.wf-home-name:hover,
+.wf-home-name:focus-visible {
+  text-decoration: underline;
+}
+.wf-home-marks {
+  display: inline-flex;
+  gap: var(--spacing-3xs, 2px);
+  margin-inline-start: var(--spacing-xs);
+  vertical-align: middle;
+}
+.wf-home-table .wf-switch {
+  padding: 0;
+}
+.wf-home-draft {
+  margin-inline-start: var(--spacing-xs);
+  font-weight: 400;
+}
+.wf-home-last {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.wf-home-none {
+  padding-block: var(--spacing-md);
+}
+@container (max-width: 720px) {
+  .wf-home-wide {
+    display: none;
+  }
+  /* On a phone each workflow is two lines: the name, then its last run, with
+     the switch beside both. */
+  .wf-home-table,
+  .wf-home-table tbody {
+    display: block;
+  }
+  .wf-home-table thead {
+    display: none;
+  }
+  .wf-home-table tbody tr {
+    display: grid;
+    grid-template-columns: 4.25rem minmax(0, 1fr);
+    grid-template-areas:
+      "on name"
+      "on last";
+    border-block-end: 1px solid
+      color-mix(in oklab, currentColor 12%, transparent);
+  }
+  .wf-home-table tbody tr > * {
+    border-block-end: 0;
+    max-width: none;
+    min-width: 0;
+  }
+  .wf-home-table tr > :first-child {
+    grid-area: on;
+    align-self: center;
+  }
+  .wf-home-table tr > th {
+    grid-area: name;
+  }
+  .wf-home-table tr > :nth-child(4) {
+    grid-area: last;
+  }
+  .wf-home-header {
+    grid-template-areas:
+      "title new"
+      "search search"
+      "filters filters";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* The first run: an empty canvas that asks what starts the workflow. */
+.wf-first-run {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The first canvas is the canvas alone: no minimap of nothing, no inspector yet. */
+.wf-first-run .react-flow__minimap,
+.wf-first-run .wf-panel,
+.wf-first-run .wf-panel-handle {
+  display: none;
+}
+/* Nothing is drawn until the first choice, and the Start card holds the middle. */
+.wf-first-run .react-flow__nodes,
+.wf-first-run .wf-empty-hint {
+  display: none;
+}
+.wf-first-start {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: var(--spacing-xs);
+  width: min(20rem, calc(100% - 2 * var(--spacing-md)));
+  padding: var(--spacing-sm);
+  border: 1px dashed currentColor;
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--color-base-100);
+  z-index: 5;
+}
+.wf-first-start h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+}
+.wf-first-start p {
+  margin: 0;
+}
+.wf-first-start .caps-button {
+  justify-content: flex-start;
+}
+
+/* Templates: a read-only mini canvas above each card. */
+.wf-template-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+.wf-templates {
+  grid-auto-rows: 1fr;
+}
+.wf-templates > * {
+  height: 100%;
+}
+.wf-template-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.wf-mini-canvas {
+  display: block;
+  width: 100%;
+  height: 7rem;
+  border-radius: var(--radius-md, 0.5rem);
+  background-color: color-mix(in oklab, currentColor 5%, transparent);
+  background-image: radial-gradient(
+    color-mix(in oklab, currentColor 18%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 14px 14px;
 }

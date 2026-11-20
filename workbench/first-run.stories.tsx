@@ -4,6 +4,7 @@ import { WorkflowWorkspace } from "../src/workspace.js";
 import { workflowClient } from "../src/workflow-client.js";
 import { createScheduleFixture } from "../test/schedules.fixture.js";
 import { ChromeFrame } from "./chrome-frame.js";
+import "@xyflow/react/dist/style.css";
 import "@fungi.computer/caps/fonts.css";
 import "../src/trellis.css";
 
@@ -42,10 +43,10 @@ const denied = Object.assign(new Error("not granted"), {
 /** A Team with no workflows, and Git access that is (or is not yet) approved. */
 function EmptyTeam({
   approved,
-  scope = "all-runs",
+  scope = "all-workflows",
 }: {
   approved: boolean;
-  scope?: "all-runs" | "templates";
+  scope?: "all-workflows" | "templates";
 }) {
   const [granted, setGranted] = useState(approved);
   const client = useMemo(
@@ -84,13 +85,13 @@ function EmptyTeam({
 
 /** Git access not approved yet: one panel, one primary action. */
 export const NeedsGitAccess = () => <EmptyTeam approved={false} />;
-/** After Approve: the welcome says what Trellis is for and offers a one-click start. */
-export const Welcome = () => <EmptyTeam approved />;
+/** A Team with no workflows: an empty canvas with a dashed Start node. */
+export const FirstRun = () => <EmptyTeam approved />;
 /** Templates before the grant: Use is off, with the reason beside it. */
 export const TemplatesBlocked = () => (
   <EmptyTeam approved={false} scope="templates" />
 );
-/** Templates after Approve: choosing one that cannot save names its cause on its own card. */
+/** Templates after Approve: choosing one that cannot save toasts its cause. */
 export const TemplateCannotSave = () => (
   <EmptyTeam approved scope="templates" />
 );

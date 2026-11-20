@@ -11,17 +11,13 @@ import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { SetupNotice } from "@fungi.computer/caps/blocks/setup-notice";
 import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import { Sigil } from "@fungi.computer/sigils";
-import { Button } from "@fungi.computer/caps/components/button";
 import {
   Tabs,
   TabsList,
   TabsTrigger,
 } from "@fungi.computer/caps/components/tabs";
-import { ActionRow } from "@fungi.computer/caps/components/action-row";
-import { DataList, DataRow } from "@fungi.computer/caps/components/data-list";
 import { useChrome, type ChromeCrumb } from "./chrome.js";
 import { WorkflowEditor } from "./editor/editor.js";
-import { emptyDraft } from "./editor/draft-store.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
 import { Runs } from "./runs/runs.js";
 import { RunWorkflow } from "./runs/run-workflow.js";
@@ -30,7 +26,12 @@ import type { OpenInApp } from "./runs/run-timeline.js";
 import { Triggers } from "./triggers/triggers.js";
 import { Templates } from "./templates/templates.js";
 import { Schedules } from "./schedules/schedules.js";
-import { Welcome } from "./welcome.js";
+import { FirstRun, type StartKind } from "./first-run.js";
+import {
+  WorkflowsHome,
+  WorkflowsHomeLoading,
+} from "./workflows/workflows-home.js";
+import { useWorkflowRows } from "./workflows/use-workflow-rows.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
@@ -47,7 +48,9 @@ const tools = [
 ] as const;
 type Tool = (typeof tools)[number]["id"];
 export type WorkflowScope =
-  | { kind: "all-runs" | "templates" | "all-workflows" | "schedules" }
+  | {
+      kind: "all-runs" | "templates" | "all-workflows" | "schedules" | "new";
+    }
   | { kind: "workflow"; workflowId: string };
 /** One place in Trellis: what Back and Forward move between. */
 type Place = Readonly<{
@@ -58,11 +61,12 @@ type Place = Readonly<{
 
 export function WorkflowWorkspace({
   client,
-  initialScope = { kind: "all-runs" },
+  initialScope = { kind: "all-workflows" },
   readMedia,
   openIn,
   browserActions,
   permissions,
+  notify,
   openRequest,
   statusApp = null,
 }: {
@@ -73,6 +77,8 @@ export function WorkflowWorkspace({
   browserActions?: Pick<HostUi, "requestBrowserAction">;
   /** The host's permission consent; the library needs approved Git access. */
   permissions?: Pick<HostUi, "requestAppPermissions">;
+  /** Where a failure is told: one toast, never a line that moves the page. */
+  notify?: Pick<HostUi, "showToast">;
   openRequest?: AppOpenRequest | null;
   /** The App whose window status bar reports the library. */
   statusApp?: Pick<AppRoot, "ui"> | null;
@@ -115,7 +121,6 @@ export function WorkflowWorkspace({
   // Git access is asked for in use, never at install: until the owner
   // approves it the library cannot be read, which is not a failure.
   const [needsGit, setNeedsGit] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
   const handledRequest = useRef<{
@@ -123,10 +128,10 @@ export function WorkflowWorkspace({
     requestId: string;
   } | null>(null);
   const choose = useCallback(
-    (id: string) => {
+    (id: string, tool: Tool = "canvas") => {
       history.push({
         scope: { kind: "workflow", workflowId: id },
-        tool: "canvas",
+        tool,
         selectedRun: null,
       });
       setRecent((current) =>
@@ -227,20 +232,29 @@ export function WorkflowWorkspace({
         setError(new Error("App permissions could not be opened.", { cause }));
       });
   };
-  async function create() {
-    setBusy(true);
-    setError(null);
-    try {
-      choose(await client.createDraft("workflow", emptyDraft()));
-    } catch (cause) {
-      setError(
-        new Error("The workflow library could not be updated.", { cause }),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  const workflows = Array.isArray(library) ? library : [];
+  /** A failure is told once, as a toast; without a host to show one it heads the page. */
+  const fail = useCallback(
+    (message: string) => {
+      if (notify) void notify.showToast({ message, tone: "error" });
+      else setError(new Error(message));
+    },
+    [notify],
+  );
+  const create = useCallback(() => {
+    go({ scope: { kind: "new" }, selectedRun: null });
+  }, [go]);
+  const workflows = useMemo(
+    () => (Array.isArray(library) ? library : []),
+    [library],
+  );
+  const {
+    rows,
+    failure: rowsFailure,
+    setOn,
+  } = useWorkflowRows(client, workflows, attempt);
+  useEffect(() => {
+    if (rowsFailure !== null) fail(rowsFailure);
+  }, [rowsFailure, fail]);
   useWindowStatus(
     statusApp,
     needsGit
@@ -267,20 +281,19 @@ export function WorkflowWorkspace({
   );
   const title = workflows.find((item) => item.workflowId === workflowId)?.title;
   const home = () => {
-    go({ scope: { kind: "all-runs" }, tool: "canvas", selectedRun: null });
+    go({ scope: { kind: "all-workflows" }, tool: "canvas", selectedRun: null });
   };
-  // A Team with no workflows opens on what Trellis is for, not an empty run list.
-  const showWelcome =
-    scope.kind === "all-runs" &&
-    selectedRun === null &&
+  // A Team with no workflows opens on a blank canvas, not an empty table.
+  const firstRun =
+    (scope.kind === "all-workflows" || scope.kind === "new") &&
     !needsGit &&
     !error &&
-    Array.isArray(library) &&
-    workflows.length === 0;
+    (scope.kind === "new" ||
+      (Array.isArray(library) && workflows.length === 0));
   const sections = [
+    { id: "all-workflows", label: "Workflows" },
     { id: "all-runs", label: "Runs" },
     { id: "templates", label: "Templates" },
-    { id: "all-workflows", label: "Workflows" },
     { id: "schedules", label: "Schedules" },
   ] as const;
   const trellis: ChromeCrumb = { id: "home", label: "Trellis", select: home };
@@ -293,10 +306,13 @@ export function WorkflowWorkspace({
           ? "Schedules"
           : scope.kind === "templates"
             ? "Templates"
-            : scope.kind === "all-workflows"
-              ? "All workflows"
-              : "All runs",
+            : scope.kind === "new"
+              ? "New workflow"
+              : scope.kind === "all-workflows"
+                ? "Workflows"
+                : "All runs",
     siblings: [
+      { id: "all-workflows", label: "Workflows" },
       { id: "all-runs", label: "All runs" },
       { id: "schedules", label: "Schedules" },
       { id: "templates", label: "Templates" },
@@ -305,13 +321,12 @@ export function WorkflowWorkspace({
         // One-character namespace preserves Agar's 64-character id bound.
         return item ? [{ id: `w${id}`, label: item.title }] : [];
       }),
-      { id: "all-workflows", label: "All workflows…" },
       { id: "new", label: "New workflow" },
     ],
     select: (id) => {
       if (id === undefined) return;
       if (id === "new") {
-        if (!busy) void create();
+        create();
         return;
       }
       if (
@@ -327,11 +342,11 @@ export function WorkflowWorkspace({
       if (item) choose(item.workflowId);
     },
   };
-  // Runs is the home view and its tab is already showing, so it needs no
+  // Workflows is the home view and its tab is already showing, so it needs no
   // crumb of its own; every other scope and each workflow adds one.
   const crumbs: readonly ChromeCrumb[] = [
     trellis,
-    ...(scope.kind === "all-runs" ? [] : [scopeCrumb]),
+    ...(scope.kind === "all-workflows" ? [] : [scopeCrumb]),
   ];
   const editing = scope.kind === "workflow" && tool === "canvas";
   const share = browserActions
@@ -367,8 +382,7 @@ export function WorkflowWorkspace({
       {
         id: "new",
         label: "New workflow",
-        disabled: busy,
-        run: () => void create(),
+        run: create,
       },
       ...share,
     ],
@@ -397,7 +411,7 @@ export function WorkflowWorkspace({
           <FailureLine message={error.message} onRetry={refreshLibrary} />
         </div>
       ) : null}
-      {scope.kind !== "workflow" ? (
+      {scope.kind !== "workflow" && scope.kind !== "new" ? (
         <Tabs
           className="wf-sections"
           value={scope.kind}
@@ -449,53 +463,40 @@ export function WorkflowWorkspace({
           />
         </main>
       ) : null}
-      {scope.kind === "all-workflows" && !needsGit ? (
-        <main className="wf-page">
-          <h1>All workflows</h1>
-          {!library ? (
-            <LoadingState
-              message={
-                slow
-                  ? "Loading is taking longer than usual."
-                  : "Loading workflows…"
-              }
-            />
-          ) : null}
-          {slow && !library ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setAttempt((value) => value + 1);
-              }}
-            >
-              Retry
-            </Button>
-          ) : null}
-          {library && !Array.isArray(library) ? (
-            <LoadingState message="Finding your workflows…" />
-          ) : null}
-          {Array.isArray(library) && workflows.length === 0 ? (
-            <Welcome
-              client={client}
-              onUse={choose}
-              onBlank={() => void create()}
-              creating={busy}
-            />
-          ) : null}
-          <DataList aria-label="Workflows">
-            {workflows.map((item) => (
-              <DataRow key={item.workflowId}>
-                <ActionRow
-                  data-workflow-id={item.workflowId}
-                  label={item.title}
-                  onClick={() => {
-                    choose(item.workflowId);
-                  }}
-                />
-              </DataRow>
-            ))}
-          </DataList>
-        </main>
+      {scope.kind === "all-workflows" &&
+      !needsGit &&
+      !error &&
+      !Array.isArray(library) ? (
+        <WorkflowsHomeLoading
+          slow={slow && !library}
+          finding={library !== null}
+          onRetry={refreshLibrary}
+        />
+      ) : null}
+      {scope.kind === "all-workflows" &&
+      !needsGit &&
+      Array.isArray(library) &&
+      workflows.length > 0 ? (
+        <WorkflowsHome
+          rows={rows}
+          creating={false}
+          actions={{
+            open: (id) => {
+              choose(id);
+            },
+            openRun: (owner, run) => {
+              history.push({
+                scope: { kind: "workflow", workflowId: owner },
+                tool: "runs",
+                selectedRun: run,
+              });
+              setAttempt((value) => value + 1);
+            },
+            setOn,
+            create,
+            fail,
+          }}
+        />
       ) : null}
       <div className="wf-editor-host" hidden={!editing}>
         {store && editorWorkflowId ? (
@@ -520,12 +521,18 @@ export function WorkflowWorkspace({
           />
         ) : null}
       </div>
-      {showWelcome ? (
-        <Welcome
+      {firstRun ? (
+        <FirstRun
+          key={scope.kind}
           client={client}
-          onUse={choose}
-          onBlank={() => void create()}
-          creating={busy}
+          permissions={permissions}
+          onCreated={(id, kind: StartKind | null) => {
+            choose(id, kind === "event" ? "triggers" : "canvas");
+          }}
+          onTemplates={() => {
+            go({ scope: { kind: "templates" }, selectedRun: null });
+          }}
+          onFail={fail}
         />
       ) : null}
       {scope.kind === "all-runs" &&
@@ -540,10 +547,7 @@ export function WorkflowWorkspace({
           />
         </main>
       ) : null}
-      {(scope.kind === "all-runs" &&
-        Array.isArray(library) &&
-        !needsGit &&
-        !showWelcome) ||
+      {(scope.kind === "all-runs" && Array.isArray(library) && !needsGit) ||
       (scope.kind === "workflow" && tool === "runs") ? (
         <Runs
           client={client}
@@ -593,6 +597,7 @@ export function WorkflowWorkspace({
         <Templates
           client={client}
           onUse={choose}
+          onFail={fail}
           blockedReason={
             needsGit
               ? "Approve Git access first, so the workflow can be saved."
