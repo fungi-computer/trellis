@@ -546,6 +546,10 @@ export function Schedules({
           {agents.kind === "loading" ? (
             <LoadingState message="Loading schedules…" />
           ) : null}
+          <p className="wf-muted">
+            Schedules of Agents on your own machine are managed from the
+            terminal: fungi schedules list.
+          </p>
           {agents.kind === "unavailable" ? (
             <p role="alert">{agents.message}</p>
           ) : null}

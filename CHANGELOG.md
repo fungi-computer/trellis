@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.27.0
+
+### Minor Changes
+
+- Changes since 0.26.3:
+
+  - feat(trellis): say private Local schedules are managed from the terminal
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.12.4
+
 ## 0.26.3
 
 ### Patch Changes
