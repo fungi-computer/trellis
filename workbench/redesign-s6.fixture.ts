@@ -222,10 +222,14 @@ export function switchClient(world: SwitchWorld) {
     }
   };
   return {
-    client: workflowClient({
-      call: (method, text) =>
-        reply(method, text).then((value) => z.json().parse(value)),
-    }),
+    // Trellis declares agent.list, so a real host always supplies the directory.
+    client: workflowClient(
+      {
+        call: (method, text) =>
+          reply(method, text).then((value) => z.json().parse(value)),
+      },
+      { list: () => Promise.resolve([]) },
+    ),
     workflowId,
   };
 }

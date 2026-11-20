@@ -51,18 +51,22 @@ function EmptyTeam({
   const [granted, setGranted] = useState(approved);
   const client = useMemo(
     () =>
-      workflowClient({
-        call: (method) => {
-          if (method === "listWorkflows")
-            return granted
-              ? Promise.resolve({ items: [] })
-              : Promise.reject(denied);
-          if (method === "listRuns") return Promise.resolve([]);
-          if (method === "viewerId")
-            return Promise.resolve({ error: "not_granted" });
-          return Promise.reject(denied);
+      workflowClient(
+        {
+          call: (method) => {
+            if (method === "listWorkflows")
+              return granted
+                ? Promise.resolve({ items: [] })
+                : Promise.reject(denied);
+            if (method === "listRuns") return Promise.resolve([]);
+            if (method === "viewerId")
+              return Promise.resolve({ error: "not_granted" });
+            return Promise.reject(denied);
+          },
         },
-      }),
+        // Trellis declares agent.list, so a real host always supplies it.
+        { list: () => Promise.resolve([]) },
+      ),
     [granted],
   );
   return (
