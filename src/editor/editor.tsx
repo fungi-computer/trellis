@@ -67,6 +67,10 @@ export type WorkflowEditorProps = {
   readMedia?: ReadMedia;
   /** Tells the person something went wrong, once, as a toast. */
   notify?: (message: string) => void;
+  /** Agent names by id, so a change reads "Added by Moss", not "Added". */
+  agentNames?: Readonly<Record<string, string>>;
+  /** The Ask an Agent panel is open: it says what to do next, so the hint waits. */
+  asking?: boolean;
 };
 /** Adds the editor's version crumb, commands and status to the header. */
 function ChromeSlot({
@@ -94,6 +98,8 @@ function Editor({
   test: testTarget,
   readMedia,
   notify,
+  agentNames,
+  asking = false,
 }: WorkflowEditorProps) {
   const state = useDraft(store);
   // An undo that fails says why in one toast; without a host it stays a line.
@@ -591,7 +597,7 @@ function Editor({
                 Triggers.
               </p>
             ) : null}
-            {runPanel && runVersion === undefined ? (
+            {runPanel && runVersion === undefined && !asking ? (
               <p id={runHintId} className="wf-muted wf-bar-note">
                 Publish a version to run this workflow.
               </p>
@@ -632,6 +638,11 @@ function Editor({
                 issues={issuesOfGraph(issues, scope.graphId)}
                 nodeResults={readOnly ? [] : test.steps}
                 nodeMarks={shownChange?.diff.marks}
+                markedBy={
+                  shownChange?.agentId == null
+                    ? undefined
+                    : agentNames?.[shownChange.agentId]
+                }
                 ghosts={
                   shownChange
                     ? { draft: shownChange.live, ids: shownChange.diff.removed }
@@ -693,11 +704,20 @@ function Editor({
                 <DraftDiffOverlay
                   diff={shownChange.diff}
                   title={stepTitle}
+                  by={
+                    shownChange.agentId == null
+                      ? undefined
+                      : agentNames?.[shownChange.agentId]
+                  }
                   busy={state.restoring}
                   onKeep={state.keepAgentChanges}
-                  onUndo={() => {
-                    void state.undoAgentChanges();
-                  }}
+                  onUndo={
+                    shownChange.canUndo
+                      ? () => {
+                          void state.undoAgentChanges();
+                        }
+                      : undefined
+                  }
                 />
               ) : null}
             </>

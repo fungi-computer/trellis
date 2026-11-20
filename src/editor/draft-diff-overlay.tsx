@@ -22,6 +22,7 @@ function lines(diff: DraftDiff, title: (id: string) => string) {
 export function DraftDiffOverlay({
   diff,
   title,
+  by,
   busy,
   onKeep,
   onUndo,
@@ -29,10 +30,13 @@ export function DraftDiffOverlay({
   diff: DraftDiff;
   /** A step's name as the canvas shows it. */
   title: (id: string) => string;
+  /** The Agent's name, when it is known: "Moss changed this draft". */
+  by?: string | undefined;
   /** An undo is running. */
   busy: boolean;
   onKeep: () => void;
-  onUndo: () => void;
+  /** Absent when there is no live version to go back to. */
+  onUndo?: (() => void) | undefined;
 }) {
   const detail = lines(diff, title);
   return (
@@ -44,7 +48,7 @@ export function DraftDiffOverlay({
       className="wf-diff"
     >
       <p className="wf-diff-summary">
-        <strong>An Agent changed this draft</strong>
+        <strong>{`${by ?? "An Agent"} changed this draft`}</strong>
         <span className="wf-diff-counts">
           {diff.changed.length > 0 ? (
             <Badge size="sm" tone="warning">
@@ -77,9 +81,11 @@ export function DraftDiffOverlay({
         <Button size="sm" variant="primary" disabled={busy} onClick={onKeep}>
           Keep
         </Button>
-        <Button size="sm" variant="outline" disabled={busy} onClick={onUndo}>
-          {busy ? "Undoing…" : "Undo"}
-        </Button>
+        {onUndo === undefined ? null : (
+          <Button size="sm" variant="outline" disabled={busy} onClick={onUndo}>
+            {busy ? "Undoing…" : "Undo"}
+          </Button>
+        )}
       </span>
     </Surface>
   );

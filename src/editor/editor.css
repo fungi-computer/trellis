@@ -451,17 +451,17 @@
 }
 /* What an Agent changed: over the canvas's top edge, clear of the add button. */
 .wf-diff {
-  position: absolute;
+  position: static;
   z-index: 5;
-  inset-block-end: var(--spacing-md);
-  inset-inline: var(--spacing-md);
+  /* Clear of the Add a step button, which sits over the stage's top-left. */
+  margin: 3.25rem var(--spacing-md) 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--spacing-xs) var(--spacing-md);
   padding: var(--spacing-xs) var(--spacing-sm);
-  max-inline-size: 44rem;
-  margin-inline: auto;
+  flex: none;
+  order: -1;
 }
 .wf-diff-summary {
   display: flex;
@@ -491,9 +491,13 @@
 }
 /* At desktop width the bar is one row along the canvas's top edge, clear of the
    Add a step button, the minimap and the zoom buttons; the detail is one muted
-   line under it. The phone keeps the stacked bar at the bottom. */
+   line under it. The phone keeps the stacked bar in the flow, right under the
+   Add a step button and above the canvas it describes. */
 @media (min-width: 641px) {
   .wf-diff {
+    position: absolute;
+    order: 0;
+    margin: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     inset-block: var(--spacing-md) auto;
@@ -512,4 +516,25 @@
   .wf-diff-lines {
     grid-column: 1 / -1;
   }
+}
+
+/* A mark ("Added by Moss") sits on its own row under the header, so the step's
+   title keeps all of its room. */
+.wf-node-markrow {
+  display: flex;
+  padding: var(--spacing-2xs) var(--spacing-sm) 0;
+}
+.wf-node-mark {
+  flex: none;
+  max-inline-size: 100%;
+}
+
+/* On the phone the stage body stacks the change bar above the canvas. */
+.wf-stage-phone .wf-stage-body:not(.wf-panel):not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+.wf-stage-phone .wf-stage-body:not(.wf-panel) > .wf-canvas {
+  flex: 1 1 0;
+  height: auto;
 }

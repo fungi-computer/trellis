@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { SetupNotice } from "@fungi.computer/caps/blocks/setup-notice";
 import { FailureLine } from "@fungi.computer/caps/components/failure-line";
+import { Button } from "@fungi.computer/caps/components/button";
 import { Sigil } from "@fungi.computer/sigils";
 import {
   Tabs,
@@ -18,6 +19,7 @@ import {
 } from "@fungi.computer/caps/components/tabs";
 import { useChrome, type ChromeCrumb } from "./chrome.js";
 import { WorkflowEditor } from "./editor/editor.js";
+import { AskAgent, type AskTarget } from "./agent/ask-agent.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
 import { Runs } from "./runs/runs.js";
 import { RunWorkflow } from "./runs/run-workflow.js";
@@ -117,6 +119,36 @@ export function WorkflowWorkspace({
   // Triggers edit the same draft, so the canvas reads it again afterwards.
   const [canvasReads, setCanvasReads] = useState(0);
   const [shareDialog, setShareDialog] = useState<ShareDialog | null>(null);
+  // The Ask an Agent panel, and the chat an Agent is building in right now.
+  const [askOpen, setAskOpen] = useState(false);
+  const [building, setBuilding] = useState<{
+    workflowId: string;
+    target: AskTarget;
+  } | null>(null);
+  // Agent names by id, so the canvas can say who added a step.
+  const [agentNames, setAgentNames] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  useEffect(() => {
+    let active = true;
+    void client.listScheduleAgents().then(
+      (agents) => {
+        if (active)
+          setAgentNames(
+            Object.fromEntries(
+              agents.map(({ agentId, name }) => [agentId, name]),
+            ),
+          );
+      },
+      (cause: unknown) => {
+        // Names are a courtesy: marks and summaries fall back to "an Agent".
+        console.error("Agent names could not be read", cause);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [client]);
   const [error, setError] = useState<Error | null>(null);
   // Git access is asked for in use, never at install: until the owner
   // approves it the library cannot be read, which is not a failure.
@@ -429,22 +461,38 @@ export function WorkflowWorkspace({
         </Tabs>
       ) : null}
       {scope.kind === "workflow" ? (
-        <Tabs
-          className="wf-sections"
-          value={tool}
-          onValueChange={(id) => {
-            const next = tools.find((item) => item.id === id);
-            if (next) go({ tool: next.id, selectedRun: null });
-          }}
-        >
-          <TabsList aria-label="Workflow tools">
-            {tools.map(({ id, label }) => (
-              <TabsTrigger key={id} value={id}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="wf-sections-row">
+          <Tabs
+            className="wf-sections"
+            value={tool}
+            onValueChange={(id) => {
+              const next = tools.find((item) => item.id === id);
+              if (next) go({ tool: next.id, selectedRun: null });
+            }}
+          >
+            <TabsList aria-label="Workflow tools">
+              {tools.map(({ id, label }) => (
+                <TabsTrigger key={id} value={id}>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {editing ? (
+            <Button
+              className="wf-ask-toggle"
+              size="sm"
+              variant="outline"
+              aria-expanded={askOpen || building !== null}
+              disabled={building !== null}
+              onClick={() => {
+                setAskOpen((open) => !open);
+              }}
+            >
+              Ask an Agent
+            </Button>
+          ) : null}
+        </div>
       ) : null}
       {needsGit &&
       (scope.kind === "all-runs" || scope.kind === "all-workflows") ? (
@@ -499,6 +547,20 @@ export function WorkflowWorkspace({
         />
       ) : null}
       <div className="wf-editor-host" hidden={!editing}>
+        {editing && workflowId !== null && (askOpen || building !== null) ? (
+          <AskAgent
+            client={client}
+            workflowId={workflowId}
+            building={
+              building?.workflowId === workflowId ? building.target : null
+            }
+            onBuilding={(target, id) => {
+              setBuilding(target === null ? null : { workflowId: id, target });
+            }}
+            permissions={permissions}
+            notify={fail}
+          />
+        ) : null}
         {store && editorWorkflowId ? (
           <WorkflowEditor
             key={`${editorWorkflowId}:${String(canvasReads)}`}
@@ -506,6 +568,8 @@ export function WorkflowWorkspace({
             active={editing}
             test={{ client, workflowId: editorWorkflowId }}
             notify={fail}
+            agentNames={agentNames}
+            asking={askOpen || building !== null}
             {...(readMedia ? { readMedia } : {})}
             runPanel={(version, autoRun = false) => (
               <RunWorkflow
@@ -527,8 +591,12 @@ export function WorkflowWorkspace({
           key={scope.kind}
           client={client}
           permissions={permissions}
-          onCreated={(id, kind: StartKind | null) => {
+          onCreated={(id, kind: StartKind | null, started) => {
             choose(id, kind === "event" ? "triggers" : "canvas");
+            if (started) {
+              setBuilding({ workflowId: id, target: started });
+              setAskOpen(true);
+            }
           }}
           onTemplates={() => {
             go({ scope: { kind: "templates" }, selectedRun: null });
@@ -578,6 +646,10 @@ export function WorkflowWorkspace({
           }}
           onOpenEditor={() => {
             go({ tool: "canvas" });
+          }}
+          onAsk={(owner) => {
+            choose(owner, "canvas");
+            setAskOpen(true);
           }}
         />
       ) : null}

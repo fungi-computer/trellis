@@ -441,3 +441,31 @@ body,
   );
   background-size: 14px 14px;
 }
+
+/* Ask an Agent: the toggle beside the tools, and the panel above the canvas. */
+.wf-editor-host > .wf-ask {
+  flex: none;
+}
+.wf-first-start .wf-ask {
+  padding: 0;
+  max-height: 60vh;
+  overflow: auto;
+}
+.wf-sections-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding-inline-end: var(--spacing-md);
+}
+.wf-sections-row .wf-ask-toggle {
+  flex: none;
+}
+.wf-sections-row {
+  block-size: 2rem;
+}
+.wf-sections-row .wf-ask-toggle {
+  block-size: 2rem;
+  min-block-size: 0;
+  padding-block: 0;
+}

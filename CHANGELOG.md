@@ -1,5 +1,23 @@
 # @fungi.computer/trellis
 
+## 0.26.0
+
+### Minor Changes
+
+- Changes since 0.25.0:
+
+  - fix(trellis): give a step's title its room and keep the Ask an Agent bars to
+    32px
+  - feat(trellis): send an Ask an Agent request with Ctrl or Cmd+Enter
+  - fix(trellis): keep the Agent's marks inside the step and end the build when
+    it goes quiet
+  - feat(trellis): describe a workflow to an agent and watch the canvas follow
+  - feat(trellis): ask an agent in one of your chats to build into a draft
+
+### Patch Changes
+
+- @fungi.computer/shiitake-extensions@0.12.1
+
 ## 0.25.0
 
 ### Minor Changes

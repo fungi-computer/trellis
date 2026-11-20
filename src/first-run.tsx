@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as z from "zod";
 import type { HostUi } from "@fungi.computer/agar";
 import { Button } from "@fungi.computer/caps/components/button";
@@ -12,6 +12,7 @@ import {
   type DraftStore,
 } from "./editor/draft-store.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
+import { AskAgent, type AskTarget } from "./agent/ask-agent.js";
 import type { WorkflowClient } from "./workflow-client.js";
 
 const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
@@ -99,13 +100,22 @@ export function FirstRun({
 }: {
   client: WorkflowClient;
   permissions?: Pick<HostUi, "requestAppPermissions"> | undefined;
-  /** The real draft exists: `kind` says which tool to open it on. */
-  onCreated: (workflowId: string, kind: StartKind | null) => void;
+  /**
+   * The real draft exists: `kind` says which tool to open it on, and `building`
+   * names the chat an Agent was just asked to build it in.
+   */
+  onCreated: (
+    workflowId: string,
+    kind: StartKind | null,
+    building?: AskTarget,
+  ) => void;
   onTemplates: () => void;
   onFail: (message: string) => void;
 }) {
   const pending = useRef<StartKind | null>(null);
-  async function create(draft: Draft) {
+  const [asking, setAsking] = useState(false);
+  /** Save the first draft, asking for Git access when it is needed, and say where. */
+  async function makeDraft(draft: Draft) {
     const make = () => client.createDraft("workflow", draft);
     let id: string;
     try {
@@ -135,7 +145,10 @@ export function FirstRun({
         { cause },
       );
     }
-    onCreated(id, pending.current);
+    return id;
+  }
+  async function create(draft: Draft) {
+    onCreated(await makeDraft(draft), pending.current);
   }
   const store = useMemo(() => firstRunStore(client, create), [client]);
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -178,6 +191,29 @@ export function FirstRun({
             {label}
           </Button>
         ))}
+        <Button
+          variant="outline"
+          aria-expanded={asking}
+          onClick={() => {
+            setAsking((open) => !open);
+          }}
+        >
+          Describe it to an Agent
+        </Button>
+        {asking ? (
+          <AskAgent
+            client={client}
+            workflowId={null}
+            prepare={() => makeDraft(startDraft("hand", zone))}
+            building={null}
+            onBuilding={(target, id) => {
+              if (target !== null) onCreated(id, null, target);
+            }}
+            permissions={permissions}
+            notify={onFail}
+            titled={false}
+          />
+        ) : null}
         <Button variant="ghost" onClick={onTemplates}>
           Start from a template
         </Button>

@@ -149,6 +149,8 @@ type CardData = {
   outputs: Readonly<Record<string, PortSchema>>;
   problem?: ReturnType<typeof nodeProblem>;
   mark?: NodeMark;
+  /** Who made the mark, when the Agent that did is named. */
+  markedBy?: string | undefined;
   loop?: string;
   /** Opens the loop's body as its own graph. */
   enter?: () => void;
@@ -214,12 +216,15 @@ function NodeCard({ data, selected, id }: NodeProps<Card>) {
         <span className="wf-node-meta" title={data.meta}>
           {data.meta}
         </span>
-        {data.mark ? (
+      </header>
+      {data.mark ? (
+        <div className="wf-node-markrow">
           <Badge size="sm" tone={markTones[data.mark]} className="wf-node-mark">
             {markWords[data.mark]}
+            {data.markedBy === undefined ? "" : ` by ${data.markedBy}`}
           </Badge>
-        ) : null}
-      </header>
+        </div>
+      ) : null}
       {data.node?.kind === "transform"
         ? Object.entries(data.node.fields).flatMap(([key, mapping]) =>
             "literal" in mapping
@@ -335,6 +340,7 @@ export function WorkflowCanvas({
   nodeStates,
   nodeResults = [],
   nodeMarks,
+  markedBy,
   ghosts,
   frames,
   readMedia,
@@ -363,6 +369,8 @@ export function WorkflowCanvas({
   nodeResults?: readonly RunStep[];
   /** Added, changed or removed since the live version, by step id. */
   nodeMarks?: Readonly<Record<string, NodeMark>>;
+  /** The Agent's name, shown on each mark: "Added by Moss". */
+  markedBy?: string;
   /**
    * Steps the draft dropped, drawn faded at their old place from the version
    * they were in. They have no pins, cannot be selected, moved or deleted.
@@ -583,6 +591,7 @@ export function WorkflowCanvas({
         ...(portsById.get(node.id) ?? { inputs: {}, outputs: {} }),
         problem: nodeProblem(own, node.id),
         mark: nodeMarks?.[node.id],
+        markedBy,
         loop:
           node.node?.kind === "map" || node.node?.kind === "repeat"
             ? loopSummary(draft.definition, node.node)
@@ -717,6 +726,7 @@ export function WorkflowCanvas({
                 inputs: {},
                 outputs: {},
                 mark: "removed" as const,
+                markedBy,
               },
             },
           ];

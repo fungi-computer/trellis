@@ -104,6 +104,7 @@ function RunDetail({
   viewerId,
   compact,
   onRun,
+  onAsk,
 }: {
   client: WorkflowClient;
   item: WorkflowRunListItem;
@@ -114,6 +115,8 @@ function RunDetail({
   compact: boolean;
   /** Open the run that "Run again" started. */
   onRun: (runId: string) => void;
+  /** Ask an Agent to change this run's workflow. */
+  onAsk?: () => void;
 }) {
   const { run: loaded, error, refresh } = useRun(client, item.runId);
   const run = loaded ?? undefined;
@@ -248,6 +251,11 @@ function RunDetail({
               {versionRelativeTime(new Date(item.startedAt).toISOString())}
             </time>
           </span>
+          {onAsk ? (
+            <Button size="sm" variant="outline" onClick={onAsk}>
+              Ask an Agent to change it
+            </Button>
+          ) : null}
           {finished ? (
             <RunAgain
               client={client}
@@ -477,6 +485,7 @@ export function Runs({
   openIn,
   onOpenWorkflows,
   onOpenEditor,
+  onAsk,
 }: {
   client: WorkflowClient;
   workflowId?: string;
@@ -486,6 +495,8 @@ export function Runs({
   openIn?: OpenInApp;
   onOpenWorkflows?: () => void;
   onOpenEditor?: () => void;
+  /** Ask an Agent to change a workflow: opens its canvas on the Ask panel. */
+  onAsk?: (workflowId: string) => void;
 }) {
   const [items, setItems] = useState<WorkflowRunListItem[] | null>(null);
   const [error, setError] = useState(false);
@@ -658,6 +669,12 @@ export function Runs({
           onRun={(runId) => {
             onSelect(runId, selected.workflowId);
           }}
+          onAsk={
+            onAsk &&
+            (() => {
+              onAsk(selected.workflowId);
+            })
+          }
         />
       ) : showDetail && items && items.length > 0 ? (
         <EmptyState

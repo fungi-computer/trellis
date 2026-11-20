@@ -212,6 +212,7 @@ export const libraryMethods = {
       "media.generation",
       "computer.writeFile",
       "agent.manage",
+      "agent.send",
     ],
     input: z.strictObject({}),
     output: z.strictObject({ more: z.boolean() }),

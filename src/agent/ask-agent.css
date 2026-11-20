@@ -1,0 +1,47 @@
+/* Ask an Agent: pick a chat, say what to build, watch the canvas follow. */
+.wf-ask {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  min-width: 0;
+}
+.wf-ask h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.wf-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+.wf-ask-building {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 2rem;
+  font-size: var(--text-sm);
+}
+.wf-ask-building strong {
+  font-weight: 600;
+}
+.wf-ask-end {
+  margin-inline-start: auto;
+}
+/* While the Agent builds the panel is one 32px bar: status left, Stop right. */
+.wf-ask-bar {
+  padding-block: 0;
+  padding-inline: var(--spacing-md);
+}
+.wf-ask-bar .wf-ask-building {
+  /* The Surface draws a 1px border either side; the bar totals 2rem. */
+  min-height: calc(2rem - 2px);
+  height: calc(2rem - 2px);
+}
+.wf-ask-bar .wf-ask-end {
+  block-size: 1.5rem;
+  min-block-size: 0;
+}

@@ -1,13 +1,14 @@
 import { workflowLibraryGill } from "./gills.js";
 import * as z from "zod";
 import type { GraphStartRequest } from "@fungi.computer/braid/runtime";
-import { memberInboxItemSchema } from "@fungi.computer/agar/inbox";
 import { catalogReplySchema as catalogReply } from "./catalog.js";
 import type { BackgroundBinding } from "@fungi.computer/puffball/background-replay";
 import type { GitBinding } from "@fungi.computer/agar/git";
 import type { WorkflowIndexes } from "./indexes.js";
 import { scheduleMethods } from "./schedule-methods.js";
 import { agentScheduleMethods } from "./agent-schedule-methods.js";
+import { agentMethods } from "./agent-methods.js";
+import { readChats } from "./chats.js";
 import type {
   listAgentSchedulesInputSchema,
   agentScheduleTargetSchema,
@@ -36,7 +37,6 @@ import {
 import { workflowIdSchema } from "@fungi.computer/braid";
 
 const identity = z.string().min(1).max(256);
-const inboxPage = z.object({ items: z.array(z.json()).max(200) });
 export type WorkflowMethodContext = Readonly<{
   indexes?: WorkflowIndexes;
   env: Readonly<{
@@ -53,6 +53,13 @@ export type WorkflowMethodContext = Readonly<{
       deleteSchedule(
         input: z.output<typeof agentScheduleTargetSchema>,
       ): Promise<typeof Schema.Json.Type>;
+      send(input: {
+        agentId: string;
+        sessionId: string;
+        requestId: string;
+        text: string;
+        delivery: "followUp";
+      }): Promise<typeof Schema.Json.Type>;
     }>;
     GIT?: GitBinding;
     /** The member's Inbox, read only to offer chats for run reports. */
@@ -168,6 +175,7 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
     }),
     ...scheduleMethods,
     ...agentScheduleMethods,
+    ...agentMethods,
     listChats: defineAppMethod({
       description:
         "List your existing chats (Agent Sessions) that a run or trigger may report its result to.",
@@ -176,24 +184,8 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
       input: z.strictObject({}),
       output: chatsReplySchema,
       handler: async (_input, context) => {
-        if (!context.env.INBOX) return { error: "not_granted" as const };
-        const page = inboxPage.parse(
-          await context.env.INBOX.page({ after: null }),
-        );
-        return {
-          chats: page.items.flatMap((raw) => {
-            const item = Schema.decodeUnknownSync(memberInboxItemSchema)(raw);
-            return "kind" in item || !("title" in item)
-              ? []
-              : [
-                  {
-                    agentId: item.agentId,
-                    sessionId: item.sessionId,
-                    title: item.title,
-                  },
-                ];
-          }),
-        };
+        const chats = await readChats(context);
+        return chats === null ? { error: "not_granted" as const } : { chats };
       },
     }),
     catalog: defineAppMethod({

@@ -29,6 +29,11 @@ import {
   runListItemSchema,
   viewerReplySchema,
 } from "@fungi.computer/workflows-wire";
+import {
+  askInputSchema,
+  askReplySchema,
+  type AskInput,
+} from "../shared/ask-agent.js";
 import type { createWorkflowShare } from "../backend/share.js";
 import type { Draft } from "./editor/draft-store.js";
 import { runStatusSchema } from "./runs/run-state.js";
@@ -86,6 +91,9 @@ export function workflowClient(
         throw new Error("The Agent directory is unavailable or not granted.");
       return agents.list();
     },
+    /** Send a build request, or a stop, into one of the person's chats. */
+    askAgent: async (input: AskInput) =>
+      call("askAgent", askInputSchema.parse(input), askReplySchema),
     listAgentSchedules: async (agentId: string) =>
       decodeAgentSchedulePage(
         await call(

@@ -10,6 +10,7 @@ import type {
   WorkflowVersion,
 } from "./draft-store.js";
 import { diffDrafts } from "./draft-diff.js";
+import { emptyDraft } from "./draft-store.js";
 
 const AUTOSAVE_IDLE_MS = 800;
 /** The canvas asks who saved the draft this often while it is on screen. */
@@ -339,13 +340,20 @@ export function useDraft(store: DraftStore) {
       active = false;
     };
   }, [store, catalogAttempt, neededAppIdsKey, draftLoaded]);
-  const newestAgentRevision =
-    head?.changedSince.find((change) => change.actor.kind === "agent")
-      ?.revision ?? null;
+  const newestAgent = head?.changedSince.find(
+    (change) => change.actor.kind === "agent",
+  );
+  const newestAgentRevision = newestAgent?.revision ?? null;
+  const newestAgentId =
+    newestAgent?.actor.kind === "agent" ? newestAgent.actor.agentId : null;
+  // A draft never published has nothing live to compare with: an Agent's
+  // build into it reads against an empty one, every step Added.
   const liveDraft =
     head?.liveVersion != null && latestPublished?.version === head.liveVersion
       ? latestPublished.draft
-      : null;
+      : head !== null && head.liveVersion === null
+        ? emptyDraft()
+        : null;
   // The diff only counts when an Agent saved since the live version, and it
   // stays hidden after Keep until an Agent saves again.
   const agentChange =
@@ -356,7 +364,14 @@ export function useDraft(store: DraftStore) {
       ? (() => {
           const diff = diffDrafts(liveDraft, draft);
           return Object.keys(diff.marks).length + diff.removed.length > 0
-            ? { diff, live: liveDraft, revision: newestAgentRevision }
+            ? {
+                diff,
+                live: liveDraft,
+                revision: newestAgentRevision,
+                agentId: newestAgentId,
+                /** Undo goes back to the live version; a first draft has none. */
+                canUndo: head?.liveVersion != null,
+              }
             : null;
         })()
       : null;
