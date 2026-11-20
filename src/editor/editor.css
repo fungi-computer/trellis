@@ -449,3 +449,67 @@
   overflow: auto;
   font-size: var(--text-xs);
 }
+/* What an Agent changed: over the canvas's top edge, clear of the add button. */
+.wf-diff {
+  position: absolute;
+  z-index: 5;
+  inset-block-end: var(--spacing-md);
+  inset-inline: var(--spacing-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs) var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  max-inline-size: 44rem;
+  margin-inline: auto;
+}
+.wf-diff-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+}
+.wf-diff-counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2xs);
+}
+.wf-diff-lines {
+  flex: 1 1 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--wf-muted);
+  font-size: max(12px, var(--text-xs));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-diff-actions {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  margin-inline-start: auto;
+}
+/* At desktop width the bar is one row along the canvas's top edge, clear of the
+   Add a step button, the minimap and the zoom buttons; the detail is one muted
+   line under it. The phone keeps the stacked bar at the bottom. */
+@media (min-width: 641px) {
+  .wf-diff {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    inset-block: var(--spacing-md) auto;
+    inset-inline: 7rem var(--spacing-md);
+    max-inline-size: none;
+    row-gap: 0;
+  }
+  .wf-diff-summary {
+    flex-wrap: nowrap;
+    min-inline-size: 0;
+  }
+  .wf-diff-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .wf-diff-lines {
+    grid-column: 1 / -1;
+  }
+}

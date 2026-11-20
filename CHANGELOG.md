@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.25.0
+
+### Minor Changes
+
+- Changes since 0.24.0:
+
+  - fix(trellis): put the Agent diff bar on one row and clean the ghost label
+  - feat(trellis): show an Agent's edits on the canvas as a diff, live
+
 ## 0.24.0
 
 ### Minor Changes

@@ -505,6 +505,7 @@ export function WorkflowWorkspace({
             store={store}
             active={editing}
             test={{ client, workflowId: editorWorkflowId }}
+            notify={fail}
             {...(readMedia ? { readMedia } : {})}
             runPanel={(version, autoRun = false) => (
               <RunWorkflow

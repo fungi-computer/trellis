@@ -342,6 +342,9 @@ export function workflowClient(
         contract.testDraftInput.parse(input),
         contract.testDraftReply,
       ),
+    /** The draft's revision, who saved it since the live version, and the live version. */
+    draftHead: (workflowId: string) =>
+      call("draftHead", { workflowId }, contract.draftHeadRead),
     revertDraft: (
       workflowId: string,
       toCommit: string,

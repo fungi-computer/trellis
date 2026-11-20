@@ -154,6 +154,18 @@ saves since the live version, newest first, and that list empties when a version
 is published. A draft saved before this was recorded shows no one: nobody was
 recorded. The Git author stays the Trellis App identity.
 
+### An Agent's edits on the canvas
+
+The open canvas asks `draftHead` every two seconds while its tab is visible.
+When an Agent has saved a newer draft and you have no edit of your own, the
+canvas adopts it with no reload. It then compares the draft with the live
+version: steps the Agent added, changed (a field or a wire) or removed are
+marked, a removed step stays as a faded ghost where it was, and a bar names the
+counts with **Keep** (accept the draft as it is) and **Undo** (put the live
+version back as the draft). If you have edits of your own, they stay, and the
+page says an Agent changed the draft. Nothing is published by this: **Publish as
+vN** is still your call.
+
 ### Build and check
 
 Trellis is a React App built with Vite. The canvas uses React Flow and the

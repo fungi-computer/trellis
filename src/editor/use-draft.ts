@@ -5,11 +5,15 @@ import type {
   Draft,
   DraftDocument,
   DraftCatalog,
+  DraftHead,
   DraftStore,
   WorkflowVersion,
 } from "./draft-store.js";
+import { diffDrafts } from "./draft-diff.js";
 
 const AUTOSAVE_IDLE_MS = 800;
+/** The canvas asks who saved the draft this often while it is on screen. */
+const HEAD_POLL_MS = 2000;
 
 /** One in-flight write; idle edits stay local until the last change settles. */
 export function useDraft(store: DraftStore) {
@@ -40,7 +44,16 @@ export function useDraft(store: DraftStore) {
     store: DraftStore;
     value: DraftCatalog;
   }> | null>(null);
+  const [head, setHead] = useState<DraftHead>(null);
+  const [keptRevision, setKeptRevision] = useState<number | null>(null);
   const live = useRef(false);
+  // What the adoption effect compares when a read of the newer draft returns.
+  const latest = useRef<{
+    document: DraftDocument | null;
+    draft: Draft | null;
+  }>({ document: null, draft: null });
+  latest.current = { document, draft };
+  const adopting = useRef<number | null>(null);
   useEffect(() => {
     live.current = true;
     return () => {
@@ -124,6 +137,87 @@ export function useDraft(store: DraftStore) {
       active = false;
     };
   }, [store, version]);
+  const following = store.head !== undefined && document !== null;
+  useEffect(() => {
+    // Settle, then schedule: one read at a time, none while the tab is hidden.
+    if (!following) return;
+    let active = true;
+    let timer: number | undefined;
+    const schedule = () => {
+      timer = window.setTimeout(tick, HEAD_POLL_MS);
+    };
+    function tick() {
+      if (globalThis.document.hidden || !store.head) {
+        schedule();
+        return;
+      }
+      void store
+        .head()
+        .then(
+          (next) => {
+            if (active) setHead(next);
+          },
+          () => {
+            // A missed read is retried on the next turn; the draft stays as it is.
+          },
+        )
+        .finally(() => {
+          if (active) schedule();
+        });
+    }
+    tick();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [store, following]);
+  useEffect(() => {
+    // Something else saved a newer draft: adopt it only while this window has
+    // no edit of its own, so the person's work is never replaced.
+    if (!head || !document) return;
+    if (
+      draft !== document.draft ||
+      saving ||
+      restoring ||
+      head.revision <= document.revision ||
+      adopting.current === head.revision
+    )
+      return;
+    const revision = head.revision;
+    adopting.current = revision;
+    void store.load().then(
+      (loaded) => {
+        const now = latest.current;
+        if (!live.current || !loaded || loaded.revision < revision) {
+          adopting.current = null;
+          return;
+        }
+        // The window changed while the read was out: edits stay, nothing adopts.
+        const { document: current, draft: currentDraft } = now;
+        if (current === null) {
+          adopting.current = null;
+          return;
+        }
+        if (
+          currentDraft !== current.draft ||
+          loaded.revision <= current.revision
+        ) {
+          adopting.current = null;
+          return;
+        }
+        const known = discovery.current;
+        const next =
+          known?.store === store ? { ...loaded, ...known.value } : loaded;
+        setDocument(next);
+        setDraft(next.draft);
+        setDebouncedDraft(next.draft);
+        setConflict(false);
+      },
+      () => {
+        adopting.current = null;
+      },
+    );
+  }, [store, head, document, draft, saving, restoring]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedDraft(draft);
@@ -245,6 +339,78 @@ export function useDraft(store: DraftStore) {
       active = false;
     };
   }, [store, catalogAttempt, neededAppIdsKey, draftLoaded]);
+  const newestAgentRevision =
+    head?.changedSince.find((change) => change.actor.kind === "agent")
+      ?.revision ?? null;
+  const liveDraft =
+    head?.liveVersion != null && latestPublished?.version === head.liveVersion
+      ? latestPublished.draft
+      : null;
+  // The diff only counts when an Agent saved since the live version, and it
+  // stays hidden after Keep until an Agent saves again.
+  const agentChange =
+    draft !== null &&
+    liveDraft !== null &&
+    newestAgentRevision !== null &&
+    (keptRevision === null || newestAgentRevision > keptRevision)
+      ? (() => {
+          const diff = diffDrafts(liveDraft, draft);
+          return Object.keys(diff.marks).length + diff.removed.length > 0
+            ? { diff, live: liveDraft, revision: newestAgentRevision }
+            : null;
+        })()
+      : null;
+  // Newer on the server while this window has edits of its own: they will be
+  // refused as a conflict, and the person is told who changed it.
+  const remoteChange =
+    head !== null &&
+    document !== null &&
+    draft !== document.draft &&
+    !saving &&
+    head.revision > document.revision
+      ? {
+          by: head.changedSince.at(0)?.actor.kind ?? ("member" as const),
+        }
+      : null;
+  async function restoreTo(target: number, notice: string, failed = "") {
+    if (!store.restore || !document || saving || restoring) return;
+    setRestoring(true);
+    setRestoreError(null);
+    setRestoreNotice(null);
+    try {
+      const result = await store.restore(target, document.revision);
+      if (!live.current) return;
+      if (result.status === "conflict") {
+        setConflict(true);
+        setRestoreError(
+          "This draft changed elsewhere. Reload the draft before restoring.",
+        );
+        return;
+      }
+      const known = discovery.current;
+      const restored =
+        known?.store === store
+          ? { ...result.document, ...known.value }
+          : result.document;
+      setDocument(restored);
+      setDraft(restored.draft);
+      setDebouncedDraft(restored.draft);
+      setConflict(false);
+      setError(null);
+      setVersion(undefined);
+      setRestoreNotice(notice);
+    } catch (cause) {
+      if (live.current)
+        setRestoreError(
+          failed +
+            (cause instanceof Error
+              ? cause.message
+              : "The version could not be restored."),
+        );
+    } finally {
+      if (live.current) setRestoring(false);
+    }
+  }
   return {
     document,
     draft,
@@ -276,50 +442,21 @@ export function useDraft(store: DraftStore) {
     restoreError,
     restoreNotice,
     restoreVersion: async () => {
-      if (
-        !store.restore ||
-        version === undefined ||
-        !document ||
-        saving ||
-        restoring
-      )
-        return;
-      const selectedVersion = version;
-      setRestoring(true);
-      setRestoreError(null);
-      setRestoreNotice(null);
-      try {
-        const result = await store.restore(selectedVersion, document.revision);
-        if (!live.current) return;
-        if (result.status === "conflict") {
-          setConflict(true);
-          setRestoreError(
-            "This draft changed elsewhere. Reload the draft before restoring.",
-          );
-          return;
-        }
-        const known = discovery.current;
-        const restored =
-          known?.store === store
-            ? { ...result.document, ...known.value }
-            : result.document;
-        setDocument(restored);
-        setDraft(restored.draft);
-        setDebouncedDraft(restored.draft);
-        setConflict(false);
-        setError(null);
-        setVersion(undefined);
-        setRestoreNotice(`Restored v${String(selectedVersion)} as a draft`);
-      } catch (cause) {
-        if (live.current)
-          setRestoreError(
-            cause instanceof Error
-              ? cause.message
-              : "The version could not be restored.",
-          );
-      } finally {
-        if (live.current) setRestoring(false);
-      }
+      if (version === undefined) return;
+      await restoreTo(version, `Restored v${String(version)} as a draft`);
+    },
+    agentChange,
+    remoteChange,
+    keepAgentChanges: () => {
+      if (newestAgentRevision !== null) setKeptRevision(newestAgentRevision);
+    },
+    undoAgentChanges: async () => {
+      if (head?.liveVersion == null) return;
+      await restoreTo(
+        head.liveVersion,
+        `Undid the Agent's changes, back to v${String(head.liveVersion)}`,
+        "Couldn't undo the Agent's changes: ",
+      );
     },
     published,
     versionError,

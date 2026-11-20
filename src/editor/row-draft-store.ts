@@ -217,6 +217,7 @@ export function rowDraftStore(
         document: document(copiedDraft(source), result.revision),
       };
     },
+    head: () => client.draftHead(workflowId),
     async listVersions() {
       return (await client.listVersions(workflowId)).map((item) => ({
         version: item.version,

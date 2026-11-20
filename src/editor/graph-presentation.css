@@ -334,3 +334,15 @@ input.wf-frame-label:focus-visible {
   font-size: max(12px, var(--text-xs));
   font-weight: 600;
 }
+/* A step the Agent's draft dropped: faded and dashed at its old place. */
+.react-flow__node:has(.wf-node[data-mark="removed"]) {
+  pointer-events: none;
+}
+.wf-node[data-mark="removed"] {
+  border-style: dashed;
+  opacity: 0.65;
+}
+.wf-node[data-mark="added"],
+.wf-node[data-mark="changed"] {
+  border-width: 2px;
+}

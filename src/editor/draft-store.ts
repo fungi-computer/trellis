@@ -67,6 +67,23 @@ export type WorkflowVersion = Readonly<{
   createdAt: string;
 }>;
 
+/** Who saved a draft revision; a Team key is named only by its kind. */
+export type DraftActor =
+  | Readonly<{ kind: "member"; memberId: string }>
+  | Readonly<{ kind: "agent"; agentId: string }>
+  | Readonly<{ kind: "team-key" }>;
+/** The draft's newest revision, the saves since the live version, and that version. */
+export type DraftHead = Readonly<{
+  revision: number;
+  /** Newest first. */
+  changedSince: readonly Readonly<{
+    actor: DraftActor;
+    revision: number;
+    at: number;
+  }>[];
+  liveVersion: number | null;
+}> | null;
+
 /** Scoped to one authorized Workflow. W4 owns identity, access and persistence. */
 export type DraftStore = {
   load(version?: number): Promise<DraftDocument | null>;
@@ -94,6 +111,8 @@ export type DraftStore = {
   /** Resumes observation of the accepted publication without submitting a new write. */
   checkPublication?(signal?: AbortSignal): Promise<number>;
   listVersions(): Promise<readonly WorkflowVersion[]>;
+  /** Reads the draft's revision and who saved it, so the canvas can follow an Agent. */
+  head?(): Promise<DraftHead>;
 };
 
 /** Stops this window's observation only; the durable publication keeps running. */

@@ -30,6 +30,8 @@ import {
 } from "./graph-address.js";
 import { connect, removeNode } from "./graph.js";
 import { Inspector } from "./inspector.js";
+import { DraftDiffOverlay } from "./draft-diff-overlay.js";
+import { nodePresentation } from "./graph-presentation.js";
 import { useDraft } from "./use-draft.js";
 import type { Draft, DraftStore } from "./draft-store.js";
 import {
@@ -63,6 +65,8 @@ export type WorkflowEditorProps = {
   /** Where "Test workflow" runs the saved draft; without it there is no Test. */
   test?: TestTarget;
   readMedia?: ReadMedia;
+  /** Tells the person something went wrong, once, as a toast. */
+  notify?: (message: string) => void;
 };
 /** Adds the editor's version crumb, commands and status to the header. */
 function ChromeSlot({
@@ -89,8 +93,14 @@ function Editor({
   active,
   test: testTarget,
   readMedia,
+  notify,
 }: WorkflowEditorProps) {
   const state = useDraft(store);
+  // An undo that fails says why in one toast; without a host it stays a line.
+  const { restoreError } = state;
+  useEffect(() => {
+    if (restoreError && notify) notify(restoreError);
+  }, [restoreError, notify]);
   const test = useTestRun({
     target: testTarget,
     definition: state.document?.draft.definition,
@@ -275,6 +285,22 @@ function Editor({
     catalog,
     document.appDisplay,
   );
+  // The Agent's diff marks the root canvas; inside a loop the loop step itself
+  // is marked, and a published version on show is never diffed.
+  const shownChange =
+    !readOnly && scope.graphId === "root" ? state.agentChange : null;
+  const stepTitle = (id: string) => {
+    const node = draft.definition.nodes.find((item) => item.id === id);
+    return node
+      ? nodePresentation(
+          draft.definition,
+          catalog,
+          node,
+          document.appDisplay,
+          false,
+        ).title
+      : id;
+  };
   const update = (next: Draft) => {
     if (!readOnly) state.setDraft(next);
   };
@@ -543,7 +569,7 @@ function Editor({
                 {state.restoreNotice}
               </p>
             ) : null}
-            {state.restoreError ? (
+            {state.restoreError && !notify ? (
               <p role="alert" className="wf-bar-note">
                 {state.restoreError}
               </p>
@@ -605,6 +631,12 @@ function Editor({
                 appDisplay={document.appDisplay}
                 issues={issuesOfGraph(issues, scope.graphId)}
                 nodeResults={readOnly ? [] : test.steps}
+                nodeMarks={shownChange?.diff.marks}
+                ghosts={
+                  shownChange
+                    ? { draft: shownChange.live, ids: shownChange.diff.removed }
+                    : undefined
+                }
                 readMedia={readMedia}
                 selected={selected}
                 onSelect={choose}
@@ -656,6 +688,17 @@ function Editor({
               )}
               {!readOnly && draft.definition.nodes.length === 0 ? (
                 <p className="wf-empty-hint">Press Tab to add a step</p>
+              ) : null}
+              {shownChange ? (
+                <DraftDiffOverlay
+                  diff={shownChange.diff}
+                  title={stepTitle}
+                  busy={state.restoring}
+                  onKeep={state.keepAgentChanges}
+                  onUndo={() => {
+                    void state.undoAgentChanges();
+                  }}
+                />
               ) : null}
             </>
           }
@@ -727,17 +770,17 @@ function Editor({
             }}
           />
         ) : null}
-        {state.error || state.conflict ? (
+        {state.error || state.conflict || state.remoteChange ? (
           <Surface
             role="alert"
             placement="embedded"
             size="sm"
             className="wf-refusal"
           >
-            {state.conflict
-              ? "This draft changed elsewhere. Your edits are still in this window; discard your local edits to open the latest draft."
+            {state.conflict || state.remoteChange
+              ? `${state.remoteChange?.by === "agent" ? "An Agent changed this draft" : "This draft changed elsewhere"}. Your edits are still in this window; discard your local edits to open the latest draft.`
               : "Draft could not be saved. Your edits remain in this window."}
-            {state.conflict ? (
+            {state.conflict || state.remoteChange ? (
               <Button
                 variant="ghost"
                 disabled={state.saving}

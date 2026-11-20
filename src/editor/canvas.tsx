@@ -335,6 +335,7 @@ export function WorkflowCanvas({
   nodeStates,
   nodeResults = [],
   nodeMarks,
+  ghosts,
   frames,
   readMedia,
   draft,
@@ -362,6 +363,14 @@ export function WorkflowCanvas({
   nodeResults?: readonly RunStep[];
   /** Added, changed or removed since the live version, by step id. */
   nodeMarks?: Readonly<Record<string, NodeMark>>;
+  /**
+   * Steps the draft dropped, drawn faded at their old place from the version
+   * they were in. They have no pins, cannot be selected, moved or deleted.
+   */
+  ghosts?: Readonly<{
+    draft: Draft;
+    ids: readonly string[];
+  }>;
   /** Comment frames; only those of this `graphId` draw. */
   frames?: readonly CanvasFrame[];
   readMedia?: ReadMedia;
@@ -657,7 +666,63 @@ export function WorkflowCanvas({
     setNewFrame(frame.id);
     setSelection(new Set([frameNodeId(frame.id)]));
   };
-  const nodes: CanvasNode[] = [...frameNodes, ...steps];
+  const ghostPlaced =
+    ghosts && graphId === "root"
+      ? placeNodes(ghosts.draft.definition, ghosts.draft.layout, measurements)
+      : null;
+  const ghostSteps: Card[] =
+    ghosts && ghostPlaced
+      ? ghosts.ids.flatMap((id) => {
+          const node = ghosts.draft.definition.nodes.find(
+            (item) => item.id === id,
+          );
+          if (!node) return [];
+          const top = narrowTop;
+          narrowTop += (measurements[`ghost:${id}`]?.height ?? 136) + 24;
+          const named = ghosts.draft.definition;
+          const app = node.kind === "app" ? named.apps[node.app] : undefined;
+          const shown = nodePresentation(
+            named,
+            catalog,
+            node,
+            appDisplay,
+            loading,
+          );
+          return [
+            {
+              id: `ghost:${id}`,
+              type: "workflow" as const,
+              measured: measurements[`ghost:${id}`],
+              position: narrow
+                ? { x: 0, y: top }
+                : (ghostPlaced.get(id) ?? { x: 0, y: 0 }),
+              selected: false,
+              selectable: false,
+              draggable: false,
+              deletable: false,
+              connectable: false,
+              focusable: false,
+              data: {
+                connectedInputs: [],
+                connectedOutputs: [],
+                results: [],
+                title: shown.title,
+                // The status chip says what happened; the step's own detail would
+                // only be cut off beside it.
+                meta: "",
+                kind: node.kind,
+                node,
+                appIcon: app ? appDisplay[app.appId]?.icon : undefined,
+                appName: app ? appDisplay[app.appId]?.displayName : undefined,
+                inputs: {},
+                outputs: {},
+                mark: "removed" as const,
+              },
+            },
+          ];
+        })
+      : [];
+  const nodes: CanvasNode[] = [...frameNodes, ...steps, ...ghostSteps];
   const tokenOf = (ref: PortRef, side: "inputs" | "outputs") =>
     pinToken(
       draft.definition.nodes.find((item) => item.id === ref.node),
