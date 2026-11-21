@@ -212,6 +212,7 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
       description:
         "Cancel a run you started or administer as the current Team owner. Completed runs remain terminal.",
       effect: "write",
+      label: "Cancel a workflow run",
       requires: ["workflow.run"],
       input: z.strictObject({ runId: identity }),
       output: cancelReplySchema,
@@ -222,6 +223,7 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
       description:
         "Answer one of your Workflow runs' reviews: approve or reject, or pick one of the review's named choices. Only a person can answer; Agents cannot.",
       effect: "write",
+      label: "Answer a workflow review",
       requires: ["workflow.run"],
       input: z.strictObject({
         runId: identity,

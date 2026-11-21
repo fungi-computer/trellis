@@ -77,6 +77,7 @@ export const libraryMethods = {
     description:
       "Check a portable Workflow file and save a new unpublished draft row.",
     effect: "write",
+    label: "Import a workflow",
     requires: ["git.repository", "workflow.run"],
     input: z.strictObject({
       bytes: z.string(),
@@ -91,6 +92,7 @@ export const libraryMethods = {
     description:
       "Copy an immutable published Workflow version into a new unpublished draft row of this library.",
     effect: "write",
+    label: "Copy a workflow",
     requires: ["git.repository", "workflow.run"],
     input: z.strictObject({
       sourceWorkflowId: workflowIdSchema,
@@ -169,6 +171,7 @@ export const libraryMethods = {
     description:
       "Validate and save a Workflow draft using its expected row revision.",
     effect: "write",
+    label: "Save a workflow draft",
     requires: ["workflow.run"],
     input: workflow.extend({
       draft: z.json(),
@@ -188,6 +191,7 @@ export const libraryMethods = {
     description:
       "Publish a validated draft to main and create its immutable version tag.",
     effect: "write",
+    label: "Publish a workflow",
     requires: ["git.repository", "workflow.run", "workflow.publish"],
     input: workflow.extend({ expectedRevision: revisionSchema }),
     output: publishReply,
@@ -255,6 +259,7 @@ export const libraryMethods = {
   revertDraft: defineAppMethod({
     description: "Restore a published Workflow version as a new draft row.",
     effect: "write",
+    label: "Restore a workflow version as a draft",
     requires: ["git.repository", "workflow.run"],
     input: workflow.extend({
       toCommit: gitSha1Schema,
@@ -274,6 +279,7 @@ export const libraryMethods = {
     description:
       "Run an immutable published Workflow version or commit. To try an unpublished draft, use testDraft. An optional delivery chat receives the run's ending.",
     effect: "write",
+    label: "Run a workflow",
     requires: ["workflow.run"],
     input: publishedRun,
     output: runReply,

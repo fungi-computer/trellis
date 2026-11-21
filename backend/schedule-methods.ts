@@ -52,6 +52,7 @@ export const scheduleMethods = {
     description:
       "Arm a published Workflow schedule as you on the pinned Computer. An optional delivery chat receives every run's ending.",
     effect: "write",
+    label: "Start a workflow schedule",
     requires: ["workflow.run", "workflow.arm"],
     input: triggerTargetSchema,
     output: scheduleArmReplySchema,
@@ -67,6 +68,7 @@ export const scheduleMethods = {
   pause: defineAppMethod({
     description: "Pause future occurrences of an armed Workflow schedule.",
     effect: "write",
+    label: "Pause a workflow schedule",
     requires: ["workflow.run", "workflow.arm"],
     input: schedulePauseInputSchema,
     output: schedulePauseReplySchema,
@@ -78,6 +80,7 @@ export const scheduleMethods = {
   resume: defineAppMethod({
     description: "Resume future occurrences of a paused Workflow schedule.",
     effect: "write",
+    label: "Resume a workflow schedule",
     requires: ["workflow.run", "workflow.arm"],
     input: scheduleResumeInputSchema,
     output: scheduleResumeReplySchema,
@@ -89,6 +92,7 @@ export const scheduleMethods = {
   disarm: defineAppMethod({
     description: "Cancel an armed Workflow schedule.",
     effect: "write",
+    label: "Stop a workflow schedule",
     requires: ["workflow.run", "workflow.arm"],
     input: scheduleDisarmInputSchema,
     output: triggerDisarmReplySchema,
@@ -111,6 +115,7 @@ export const scheduleMethods = {
     description:
       "Arm a published Workflow App-event trigger as you on the pinned Computer. An optional delivery chat receives every run's ending.",
     effect: "write",
+    label: "Start a workflow event trigger",
     requires: ["workflow.run", "workflow.arm"],
     input: triggerTargetSchema,
     output: eventArmReplySchema,
@@ -126,6 +131,7 @@ export const scheduleMethods = {
   disarmEventTrigger: defineAppMethod({
     description: "Disarm this installation's App-event trigger.",
     effect: "write",
+    label: "Stop a workflow event trigger",
     requires: ["workflow.run", "workflow.arm"],
     input: eventDisarmInputSchema,
     output: triggerDisarmReplySchema,

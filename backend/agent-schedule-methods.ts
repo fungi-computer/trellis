@@ -30,6 +30,7 @@ export const agentScheduleMethods = {
     description:
       "Pause future occurrences of the exact listed Agent schedule, retaining accepted work.",
     effect: "write",
+    label: "Pause an Agent schedule",
     requires: ["agent.manage"],
     input: agentScheduleTargetSchema,
     output: agentScheduleControlReplySchema,
@@ -40,6 +41,7 @@ export const agentScheduleMethods = {
     description:
       "Resume future occurrences of the exact listed Agent schedule, retaining accepted work.",
     effect: "write",
+    label: "Resume an Agent schedule",
     requires: ["agent.manage"],
     input: agentScheduleTargetSchema,
     output: agentScheduleControlReplySchema,
@@ -50,6 +52,7 @@ export const agentScheduleMethods = {
     description:
       "Cancel future occurrences of the exact listed Agent schedule, retaining accepted work and history.",
     effect: "write",
+    label: "Delete an Agent schedule",
     requires: ["agent.manage"],
     input: agentScheduleTargetSchema,
     output: agentScheduleControlReplySchema,

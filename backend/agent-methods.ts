@@ -26,6 +26,7 @@ export const agentMethods = {
     description:
       "Send a follow-up into one of your chats asking its Agent to build into a Workflow draft with loadWorkflow, saveDraft and testDraft, or to stop. The chat must be one of yours.",
     effect: "write",
+    label: "Ask an Agent to build a workflow",
     requires: ["agent.send"],
     input: askInputSchema,
     output: askReplySchema,
