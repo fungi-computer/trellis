@@ -1,5 +1,17 @@
 # @fungi.computer/trellis
 
+## 0.28.1
+
+### Patch Changes
+
+- Changes since 0.28.0:
+
+  - fix(trellis): say a run's inputs weren't recorded on an older Oyster
+  - fix(trellis): read a run status from a host a release apart
+
+- Updated dependencies
+  - @fungi.computer/workflows-wire@0.7.9
+
 ## 0.28.0
 
 ### Minor Changes

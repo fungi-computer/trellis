@@ -30,7 +30,7 @@ export function RunWorkflow({
   /** Run the saved draft at this revision as a test, instead of a published version. */
   testRevision?: number | undefined;
   /** Start the form from these values (a run's own input) instead of the defaults. */
-  input?: RunStatus["input"];
+  input?: NonNullable<RunStatus["input"]>;
   /** Run a newly published version when its defaults need no further choices. */
   autoRun?: boolean;
   onRun: (id: string) => void;

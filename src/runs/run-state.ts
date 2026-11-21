@@ -41,8 +41,11 @@ export const runStatusSchema = z.object({
   planDigest: z.string(),
   outcome: runOutcomeSchema,
   title: z.string(),
-  /** What the run was admitted with, so "Run again" starts from the same values. */
-  input: z.record(z.string(), z.json()),
+  /**
+   * What the run was admitted with, so "Run again" starts from the same
+   * values; `null` when its Oyster predates recording it.
+   */
+  input: z.record(z.string(), z.json()).nullable(),
   events: z.array(event),
   reviews: z.array(z.object({ review: reviewSchema, status: z.string() })),
   status: z.string(),

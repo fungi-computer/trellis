@@ -31,7 +31,7 @@ import {
   catalogInputSchema,
   runListItemSchema,
   runsReplySchema,
-  statusReply,
+  hostStatusReply,
   viewerReplySchema,
 } from "@fungi.computer/workflows-wire";
 import { workflowIdSchema } from "@fungi.computer/braid";
@@ -204,9 +204,9 @@ export const appBackend = defineAppBackend<WorkflowMethodContext>({
       effect: "read",
       requires: ["workflow.run"],
       input: z.strictObject({ runId: identity }),
-      output: statusReply,
+      output: hostStatusReply,
       handler: async (input, context) =>
-        statusReply.parse(await granted(context).graphStatus(input)),
+        hostStatusReply.parse(await granted(context).graphStatus(input)),
     }),
     cancel: defineAppMethod({
       description:

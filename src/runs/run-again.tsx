@@ -15,7 +15,7 @@ import type { RunStatus } from "./run-state.js";
 
 /**
  * Start the same run again. Nothing replays on its own: the run's own input
- * fills the ordinary run form, and the person looks it over and starts it. A
+ * (when its Oyster recorded one) fills the ordinary run form, and the person looks it over and starts it. A
  * published run uses its own version; a test runs the draft as saved now. The
  * Apps are chosen again at the start, as they are for any run.
  */
@@ -47,9 +47,11 @@ export function RunAgain({
           <DialogTitle>Run again</DialogTitle>
           <DialogDescription>
             {isTest
-              ? "Tests the draft as it is saved now, with the same inputs."
-              : `Starts a new run of v${String(version)} with the same inputs.`}{" "}
-            Check them, then start it.
+              ? "Tests the draft as it is saved now"
+              : `Starts a new run of v${String(version)}`}
+            {input === null
+              ? ". This run's inputs weren't recorded, so fill them in, then start it."
+              : ", with the same inputs. Check them, then start it."}
           </DialogDescription>
         </DialogHeader>
         <RunWorkflow
@@ -57,7 +59,7 @@ export function RunAgain({
           workflowId={item.workflowId}
           version={version ?? undefined}
           testRevision={isTest ? draftRevision : undefined}
-          input={input}
+          input={input ?? undefined}
           onRun={(runId) => {
             setOpen(false);
             onRun(runId);

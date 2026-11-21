@@ -54,8 +54,8 @@ importers:
         specifier: 0.1.5
         version: 0.1.5
       '@fungi.computer/workflows-wire':
-        specifier: 0.7.8
-        version: 0.7.8(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.0)(web-tree-sitter@0.25.10)(ws@8.23.0)
+        specifier: 0.7.9
+        version: 0.7.9(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.0)(web-tree-sitter@0.25.10)(ws@8.23.0)
       '@xyflow/react':
         specifier: 12.12.0
         version: 12.12.0(@types/react-dom@18.3.3(@types/react@18.3.3))(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -925,8 +925,8 @@ packages:
       '@opentui/keymap':
         optional: true
 
-  '@fungi.computer/workflows-wire@0.7.8':
-    resolution: {integrity: sha512-Cku6DVkgD3m3wCUyBhc5GTqSngXsbFZBuOdmDX3f0cgfV3x+Dmak29JDCbYQ053pH3WftKpBUWBZo1y0pJCdnQ==}
+  '@fungi.computer/workflows-wire@0.7.9':
+    resolution: {integrity: sha512-IcdfJSkfDywO4nQItY+eET6ngr25m0vHuySx+H8ZtSTxLt4OvPNU8TwEP4Yur2KiUxtnGrB5I9lJdj408vP9MA==}
 
   '@google/genai@2.21.0':
     resolution: {integrity: sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==}
@@ -5669,7 +5669,7 @@ snapshots:
     optionalDependencies:
       '@opentui/keymap': 0.5.10(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10)
 
-  '@fungi.computer/workflows-wire@0.7.8(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.0)(web-tree-sitter@0.25.10)(ws@8.23.0)':
+  '@fungi.computer/workflows-wire@0.7.9(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.0)(web-tree-sitter@0.25.10)(ws@8.23.0)':
     dependencies:
       '@fungi.computer/agar': 0.27.0(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10)
       '@fungi.computer/braid': 0.6.8(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.1(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.0)(web-tree-sitter@0.25.10)(ws@8.23.0)
