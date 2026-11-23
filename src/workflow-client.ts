@@ -36,8 +36,38 @@ import {
 } from "../shared/ask-agent.js";
 import type { createWorkflowShare } from "../backend/share.js";
 import type { Draft } from "./editor/draft-store.js";
+import { LoadFailure } from "./editor/load-cause.js";
 import { runStatusSchema } from "./runs/run-state.js";
 
+/**
+ * Run a read whose failure the editor explains to the person: a refused or
+ * unreachable transport and a reply that does not decode become typed causes.
+ */
+async function reading<T>(
+  subject: "catalog" | "workflow",
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (cause) {
+    if (cause instanceof LoadFailure) throw cause;
+    throw new LoadFailure(
+      cause instanceof z.ZodError
+        ? { kind: "decode", subject }
+        : { kind: "transport" },
+      { cause },
+    );
+  }
+}
+function decodeCatalog(input: unknown) {
+  try {
+    return S.decodeUnknownSync(catalogSchema)(input, {
+      onExcessProperty: "error",
+    });
+  } catch (cause) {
+    throw new LoadFailure({ kind: "decode", subject: "catalog" }, { cause });
+  }
+}
 export type WorkflowTransport = z.output<typeof appMethods.schema>;
 export function openWorkflows(capabilities: CapabilityDirectory) {
   return workflowClient(capabilities.require(appMethods), {
@@ -85,6 +115,82 @@ export function workflowClient(
     const reply = await call("listChats", {}, triggers.chatsReplySchema);
     return "chats" in reply ? reply.chats : [];
   }
+  async function loadWorkflowRaw(
+    workflowId: string,
+    at: "draft" | { commit: string } = "draft",
+  ) {
+    let doc = await call(
+      "loadWorkflow",
+      { workflowId, at },
+      contract.documentRead,
+    );
+    if (doc && "kind" in doc) {
+      if (at === "draft") throw new LoadFailure({ kind: "rebuilding" });
+      await rebuild({ workflowId, at });
+      doc = await call(
+        "loadWorkflow",
+        { workflowId, at },
+        contract.documentRead,
+      );
+    }
+    if (doc && "kind" in doc) throw new LoadFailure({ kind: "rebuilding" });
+    if (!doc) return null;
+    const saved =
+      at === "draft"
+        ? contract.draftDocument.parse(doc)
+        : contract.document.parse(doc);
+    try {
+      return {
+        ...saved,
+        definition: S.decodeUnknownSync(workflowDefinitionSchema)(
+          saved.definition,
+        ),
+      };
+    } catch (cause) {
+      throw new LoadFailure({ kind: "decode", subject: "workflow" }, { cause });
+    }
+  }
+  async function catalogRaw(appIds: readonly string[] = []) {
+    const index = await call("catalog", {}, catalogReplySchema);
+    if (!("apps" in index))
+      throw new LoadFailure({
+        kind: "hub-index",
+        code: "error" in index ? index.error : "unavailable",
+      });
+    const needed = new Set(appIds);
+    const matches = index.apps.filter((app) => needed.has(app.appId));
+    const details = await Promise.all(
+      matches.map((match) =>
+        call(
+          "catalog",
+          { installationId: match.installationId },
+          catalogReplySchema,
+        ),
+      ),
+    );
+    return {
+      apps: index.apps,
+      catalog: decodeCatalog(
+        Object.fromEntries(
+          details.flatMap((detail) =>
+            "app" in detail
+              ? [
+                  [
+                    detail.app.appId,
+                    detail.app.events === undefined
+                      ? { methods: detail.app.methods }
+                      : {
+                          methods: detail.app.methods,
+                          events: detail.app.events,
+                        },
+                  ] as const,
+                ]
+              : [],
+          ),
+        ),
+      ),
+    };
+  }
   return {
     async listScheduleAgents() {
       if (agents === undefined)
@@ -131,45 +237,8 @@ export function workflowClient(
      * `Catalog` with full ports for only the named `appIds` -- one extra
      * round trip per named App, never the whole installed set.
      */
-    async catalog(appIds: readonly string[] = []) {
-      const index = await call("catalog", {}, catalogReplySchema);
-      if (!("apps" in index))
-        throw new Error("error" in index ? index.error : "unavailable");
-      const needed = new Set(appIds);
-      const matches = index.apps.filter((app) => needed.has(app.appId));
-      const details = await Promise.all(
-        matches.map((match) =>
-          call(
-            "catalog",
-            { installationId: match.installationId },
-            catalogReplySchema,
-          ),
-        ),
-      );
-      return {
-        apps: index.apps,
-        catalog: S.decodeUnknownSync(catalogSchema)(
-          Object.fromEntries(
-            details.flatMap((detail) =>
-              "app" in detail
-                ? [
-                    [
-                      detail.app.appId,
-                      detail.app.events === undefined
-                        ? { methods: detail.app.methods }
-                        : {
-                            methods: detail.app.methods,
-                            events: detail.app.events,
-                          },
-                    ] as const,
-                  ]
-                : [],
-            ),
-          ),
-          { onExcessProperty: "error" },
-        ),
-      };
-    },
+    catalog: (appIds: readonly string[] = []) =>
+      reading("catalog", () => catalogRaw(appIds)),
     arm: (target: triggers.WorkflowTriggerTarget) =>
       call(
         "arm",
@@ -248,39 +317,10 @@ export function workflowClient(
       }
       throw new Error("No workflow name is available.");
     },
-    async loadWorkflow(
+    loadWorkflow: (
       workflowId: string,
       at: "draft" | { commit: string } = "draft",
-    ) {
-      let doc = await call(
-        "loadWorkflow",
-        { workflowId, at },
-        contract.documentRead,
-      );
-      if (doc && "kind" in doc) {
-        if (at === "draft")
-          throw new Error("Workflow draft row unavailable; reload.");
-        await rebuild({ workflowId, at });
-        doc = await call(
-          "loadWorkflow",
-          { workflowId, at },
-          contract.documentRead,
-        );
-      }
-      if (doc && "kind" in doc)
-        throw new Error("Workflow document is still rebuilding; retry.");
-      if (!doc) return null;
-      const saved =
-        at === "draft"
-          ? contract.draftDocument.parse(doc)
-          : contract.document.parse(doc);
-      return {
-        ...saved,
-        definition: S.decodeUnknownSync(workflowDefinitionSchema)(
-          saved.definition,
-        ),
-      };
-    },
+    ) => reading("workflow", () => loadWorkflowRaw(workflowId, at)),
     saveDraft: (workflowId: string, draft: Draft, expectedRevision: number) =>
       call(
         "saveDraft",

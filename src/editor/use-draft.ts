@@ -11,6 +11,7 @@ import type {
 } from "./draft-store.js";
 import { diffDrafts } from "./draft-diff.js";
 import { emptyDraft } from "./draft-store.js";
+import { loadCause, type LoadCause } from "./load-cause.js";
 
 const AUTOSAVE_IDLE_MS = 800;
 /** The canvas asks who saved the draft this often while it is on screen. */
@@ -26,9 +27,9 @@ export function useDraft(store: DraftStore) {
     version: number;
     draft: Draft;
   } | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const [error, setError] = useState<LoadCause | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState<unknown>(null);
+  const [catalogError, setCatalogError] = useState<LoadCause | null>(null);
   const [historyError, setHistoryError] = useState<unknown>(null);
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -40,7 +41,7 @@ export function useDraft(store: DraftStore) {
   const [historyAttempt, setHistoryAttempt] = useState(0);
   const [version, setVersion] = useState<number | undefined>();
   const [published, setPublished] = useState<DraftDocument | null>(null);
-  const [versionError, setVersionError] = useState<unknown>(null);
+  const [versionError, setVersionError] = useState<LoadCause | null>(null);
   const discovery = useRef<Readonly<{
     store: DraftStore;
     value: DraftCatalog;
@@ -68,7 +69,7 @@ export function useDraft(store: DraftStore) {
       (loaded) => {
         if (!active) return;
         if (!loaded) {
-          setError(new Error("Workflow was not found"));
+          setError({ kind: "not-found", subject: "workflow" });
           return;
         }
         const known = discovery.current;
@@ -79,7 +80,7 @@ export function useDraft(store: DraftStore) {
         setConflict(false);
       },
       (cause: unknown) => {
-        if (active) setError(cause);
+        if (active) setError(loadCause(cause));
       },
     );
     return () => {
@@ -128,10 +129,10 @@ export function useDraft(store: DraftStore) {
         (loaded) => {
           if (!active) return;
           if (loaded) setPublished(loaded);
-          else setVersionError(new Error("Published version was not found"));
+          else setVersionError({ kind: "not-found", subject: "version" });
         },
         (cause: unknown) => {
-          if (active) setVersionError(cause);
+          if (active) setVersionError(loadCause(cause));
         },
       );
     return () => {
@@ -259,7 +260,7 @@ export function useDraft(store: DraftStore) {
           }
         },
         (cause: unknown) => {
-          if (live.current) setError(cause);
+          if (live.current) setError(loadCause(cause));
         },
       )
       .finally(() => {
@@ -332,7 +333,7 @@ export function useDraft(store: DraftStore) {
           setCatalogAttempt((attempt) => attempt + 1);
           return;
         }
-        setCatalogError(cause);
+        setCatalogError(loadCause(cause));
         setCatalogLoading(false);
       },
     );

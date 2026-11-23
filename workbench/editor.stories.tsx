@@ -2,7 +2,9 @@ import { Toaster, toast } from "@fungi.computer/caps/components/toaster";
 import { savedDraftFixture } from "./draft-store.fixture.js";
 import type { Json } from "@fungi.computer/braid";
 import { ValueField } from "../src/editor/value-field.js";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as S from "effect/Schema";
+import { catalogSchema, workflowDefinitionSchema } from "@fungi.computer/braid";
 import { WorkflowEditor } from "../src/editor/editor.js";
 import { ChromeFrame } from "./chrome-frame.js";
 import { memoryDraftStore, emptyDraft } from "../src/editor/draft-store.js";
@@ -71,26 +73,73 @@ export function SavedDraft() {
   );
 }
 
+/** The replies a Hub would send, encoded by the real schemas. */
+const encodedCatalog = S.encodeSync(catalogSchema)(fixtureCatalog);
+const encodedDefinition = S.encodeSync(workflowDefinitionSchema)(
+  fixtureDraft.definition,
+);
+
 function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
+  // Only the person's own press of Retry catalog lets the Hub answer.
+  const retried = useRef(false);
+  useEffect(() => {
+    const press = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("button")?.textContent === "Retry catalog"
+      )
+        retried.current = true;
+    };
+    document.addEventListener("click", press, true);
+    return () => {
+      document.removeEventListener("click", press, true);
+    };
+  }, []);
   const [store] = useState(() => {
-    let attempts = 0;
     const client = workflowClient({
-      call: (method) => {
+      call: (method, input) => {
         if (method === "loadWorkflow")
-          return Promise.resolve({ ...fixtureDraft, commit: "a".repeat(40) });
+          return Promise.resolve({
+            definition: encodedDefinition,
+            layout: fixtureDraft.layout,
+            revision: 1,
+          });
         if (method === "listVersions") return Promise.resolve([]);
         if (method === "catalog") {
-          attempts += 1;
-          if (catalogFails && attempts === 1)
-            return Promise.reject(new Error("Catalog 502 fixture"));
-          return Promise.resolve({
-            apps: Object.entries(fixtureCatalog).map(([appId, app]) => ({
-              appId,
-              installationId: appId,
-              displayName: appId,
-              methods: app.methods,
-            })),
-          });
+          if (input === "{}") {
+            if (catalogFails && !retried.current)
+              return Promise.reject(new Error("Catalog 502 fixture"));
+            return Promise.resolve({
+              apps: Object.entries(encodedCatalog).map(([appId, app]) => ({
+                appId,
+                installationId: appId,
+                displayName: appId,
+                methods: Object.fromEntries(
+                  Object.entries(app.methods).map(([name, method]) => [
+                    name,
+                    {
+                      description: method.description,
+                      effect: method.effect,
+                      approval: method.approval,
+                      requires: method.requires,
+                      digest: method.digest,
+                    },
+                  ]),
+                ),
+              })),
+            });
+          }
+          for (const [appId, app] of Object.entries(encodedCatalog))
+            if (input === JSON.stringify({ installationId: appId }))
+              return Promise.resolve({
+                app: {
+                  appId,
+                  installationId: appId,
+                  displayName: appId,
+                  methods: app.methods,
+                },
+              });
+          return Promise.resolve({ error: "unavailable" });
         }
         throw new Error(`Fixture does not execute ${method}`);
       },

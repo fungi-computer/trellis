@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.29.6
+
+### Patch Changes
+
+- Changes since 0.29.5:
+
+  - fix(trellis): explain a failed load from a typed cause
+  - fix(trellis): name the cause when a workflow or app catalog cannot load
+
 ## 0.29.5
 
 ### Patch Changes

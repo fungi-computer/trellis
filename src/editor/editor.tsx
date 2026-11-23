@@ -56,6 +56,7 @@ import {
 import { versionRelativeTime } from "../history/relative-time.js";
 import { CatalogLoadingProvider } from "./catalog-loading.js";
 import { useChrome, type ChromeParts } from "../chrome.js";
+import { loadCauseWords } from "./load-cause.js";
 import "./editor.css";
 
 export type WorkflowEditorProps = {
@@ -254,7 +255,7 @@ function Editor({
         <ChromeSlot active={active} parts={navigation} />
         {failed ? (
           <FailureLine
-            message="Workflow could not be loaded."
+            message={`Workflow could not be loaded: ${loadCauseWords(state.error ?? state.versionError ?? { kind: "unexpected" })}`}
             retryLabel={readOnly ? "Return to draft" : "Retry"}
             onRetry={() => {
               if (readOnly) state.setVersion(undefined);
@@ -531,7 +532,7 @@ function Editor({
           <header className="wf-bar" ref={headerRef}>
             {state.catalogError !== null ? (
               <p role="alert" className="wf-bar-note">
-                App catalog could not be loaded. Your draft is still available.
+                {`App catalog could not be loaded: ${loadCauseWords(state.catalogError)} Your draft is still available.`}
                 <Button
                   variant="ghost"
                   size="sm"
