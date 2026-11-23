@@ -5,6 +5,7 @@ import { ValueField } from "../src/editor/value-field.js";
 import { useEffect, useRef, useState } from "react";
 import * as S from "effect/Schema";
 import { catalogSchema, workflowDefinitionSchema } from "@fungi.computer/braid";
+import type { ToastAction } from "../src/agent/ask-agent.js";
 import { WorkflowEditor } from "../src/editor/editor.js";
 import { ChromeFrame } from "./chrome-frame.js";
 import { memoryDraftStore, emptyDraft } from "../src/editor/draft-store.js";
@@ -148,17 +149,22 @@ function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
   });
   return (
     <>
+      {/* A maximised window: its header is the top of the page, as in the product. */}
+      <div style={{ position: "fixed", inset: 0, overflow: "auto" }}>
+        <ChromeFrame pinned>
+          <WorkflowEditor
+            store={store}
+            runPanel={() => <p>Run form fixture</p>}
+            offer={offer}
+            active
+          />
+        </ChromeFrame>
+      </div>
+      <Toaster id="trellis-contest" />
       <p role="note">
         Fixture only · document and catalog replies are simulated; no
         publication or execution.
       </p>
-      <ChromeFrame>
-        <WorkflowEditor
-          store={store}
-          runPanel={() => <p>Run form fixture</p>}
-          active
-        />
-      </ChromeFrame>
     </>
   );
 }
@@ -189,6 +195,18 @@ export function ToastClearance() {
       </button>
     </>
   );
+}
+/** The host's toast with one action that stays up, as the workspace shows it. */
+function offer(message: string, action: ToastAction) {
+  const id = toast.error(message, {
+    toasterId: "trellis-contest",
+    closeButton: true,
+    duration: Infinity,
+    action: { label: action.label, onClick: action.onSelect },
+  });
+  return () => {
+    toast.dismiss(id);
+  };
 }
 export const UnpublishedDraft = () => <ContestDraft catalogFails={false} />;
 export const CatalogFailure = () => <ContestDraft catalogFails />;

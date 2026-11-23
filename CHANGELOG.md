@@ -1,5 +1,15 @@
 # @fungi.computer/trellis
 
+## 0.29.7
+
+### Patch Changes
+
+- Changes since 0.29.6:
+
+  - fix(trellis): tell a failed App catalog in a toast with Retry
+  - fix(trellis): keep unresolved step titles whole and the catalog note off the
+    canvas
+
 ## 0.29.6
 
 ### Patch Changes

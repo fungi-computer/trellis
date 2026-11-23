@@ -284,6 +284,7 @@ export function WorkflowWorkspace({
     const id = toast.error(message, {
       toasterId: actionToaster,
       closeButton: true,
+      duration: action.persistent ? Infinity : undefined,
       action: { label: action.label, onClick: action.onSelect },
     });
     return () => {
@@ -595,6 +596,7 @@ export function WorkflowWorkspace({
             active={editing}
             test={{ client, workflowId: editorWorkflowId }}
             notify={fail}
+            offer={offer}
             agentNames={agentNames}
             asking={askOpen || building !== null}
             {...(readMedia ? { readMedia } : {})}

@@ -21,7 +21,12 @@ const POLL_MS = 2000;
 const QUIET_MS = 45_000;
 
 /** The one action a toast offers. */
-export type ToastAction = Readonly<{ label: string; onSelect: () => void }>;
+export type ToastAction = Readonly<{
+  label: string;
+  onSelect: () => void;
+  /** Stays up until the action is taken or the toast is dismissed. */
+  persistent?: boolean;
+}>;
 
 /** The chat an Agent is asked in. */
 export type AskTarget = Readonly<{ agentId: string; sessionId: string }>;

@@ -60,7 +60,7 @@ function savedWords(state: EditorChromeState) {
 /** Words for what is wrong with the draft, or nothing when nothing is. */
 function problemWords(state: EditorChromeState) {
   if (state.catalogLoading) return "Loading Apps…";
-  if (state.catalogFailed) return "Not checked";
+  if (state.catalogFailed) return "Apps unavailable";
   if (state.problems === 0) return null;
   return `${String(state.problems)} ${state.problems === 1 ? "problem" : "problems"}`;
 }

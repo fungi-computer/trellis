@@ -140,8 +140,8 @@ export function nodePresentation(
     // Before the first catalog answer a step is loading, not unavailable.
     if (!method && !loading)
       return {
-        title: node.title ?? "App method unavailable",
-        meta: `${app ?? "App"} · Install the declared App to describe this step.`,
+        title: node.title ?? "App unavailable",
+        meta: `${app ?? "App"} · ${humanTitle(node.method)}`,
       };
     const name = humanTitle(node.method);
     return {

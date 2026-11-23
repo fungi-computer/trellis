@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { ToastAction } from "../agent/ask-agent.js";
 import { WorkflowCanvas, type CanvasPoint } from "./canvas.js";
 import {
   disconnectStep,
@@ -69,6 +70,8 @@ export type WorkflowEditorProps = {
   readMedia?: ReadMedia;
   /** Tells the person something went wrong, once, as a toast. */
   notify?: (message: string) => void;
+  /** A toast that stays with one action beside it; the returned call clears it. */
+  offer?: (message: string, action: ToastAction) => () => void;
   /** Agent names by id, so a change reads "Added by Moss", not "Added". */
   agentNames?: Readonly<Record<string, string>>;
   /** The Ask an Agent panel is open: it says what to do next, so the hint waits. */
@@ -100,6 +103,7 @@ function Editor({
   test: testTarget,
   readMedia,
   notify,
+  offer,
   agentNames,
   asking = false,
 }: WorkflowEditorProps) {
@@ -110,6 +114,24 @@ function Editor({
   useEffect(() => {
     if (restoreError && notify) notify(restoreError);
   }, [restoreError, notify]);
+  // A catalog that will not load stays one toast with Retry until it loads or
+  // is dismissed; the header's status keeps saying so after.
+  const { catalogError } = state;
+  const refreshCatalog = useRef(state.refreshCatalog);
+  refreshCatalog.current = state.refreshCatalog;
+  useEffect(() => {
+    if (catalogError === null || !offer) return undefined;
+    return offer(
+      `App catalog could not be loaded: ${loadCauseWords(catalogError)} Your draft is still available.`,
+      {
+        label: "Retry catalog",
+        onSelect: () => {
+          refreshCatalog.current();
+        },
+        persistent: true,
+      },
+    );
+  }, [catalogError, offer]);
   const test = useTestRun({
     target: testTarget,
     definition: state.document?.draft.definition,
@@ -506,7 +528,6 @@ function Editor({
     ),
   };
   const notes = [
-    state.catalogError !== null,
     state.historyError,
     state.restoreNotice,
     state.restoreError,
@@ -530,18 +551,6 @@ function Editor({
         <ChromeSlot active={active} parts={chromeParts} />
         {notes ? (
           <header className="wf-bar" ref={headerRef}>
-            {state.catalogError !== null ? (
-              <p role="alert" className="wf-bar-note">
-                {`App catalog could not be loaded: ${loadCauseWords(state.catalogError)} Your draft is still available.`}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={state.refreshCatalog}
-                >
-                  Retry catalog
-                </Button>
-              </p>
-            ) : null}
             {state.historyError ? (
               <p role="alert" className="wf-bar-note">
                 Version history could not be loaded.

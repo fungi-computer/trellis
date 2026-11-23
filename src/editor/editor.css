@@ -123,9 +123,8 @@
   border-bottom: 1px solid var(--wf-line);
 }
 .wf-node-title {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.35em;
+  display: block;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 68%;
   overflow: hidden;
