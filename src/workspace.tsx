@@ -11,6 +11,7 @@ import { LoadingState } from "@fungi.computer/caps/blocks/loading-state";
 import { SetupNotice } from "@fungi.computer/caps/blocks/setup-notice";
 import { FailureLine } from "@fungi.computer/caps/components/failure-line";
 import { Button } from "@fungi.computer/caps/components/button";
+import { Toaster, toast } from "@fungi.computer/caps/components/toaster";
 import { Sigil } from "@fungi.computer/sigils";
 import {
   Tabs,
@@ -19,7 +20,11 @@ import {
 } from "@fungi.computer/caps/components/tabs";
 import { useChrome, type ChromeCrumb } from "./chrome.js";
 import { WorkflowEditor } from "./editor/editor.js";
-import { AskAgent, type AskTarget } from "./agent/ask-agent.js";
+import {
+  AskAgent,
+  type AskTarget,
+  type ToastAction,
+} from "./agent/ask-agent.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
 import { Runs } from "./runs/runs.js";
 import { RunWorkflow } from "./runs/run-workflow.js";
@@ -37,6 +42,8 @@ import { useWorkflowRows } from "./workflows/use-workflow-rows.js";
 import type { WorkflowClient } from "./workflow-client.js";
 import type { AppOpenRequest } from "@fungi.computer/agar";
 import { workflowIdSchema } from "@fungi.computer/braid";
+/** The Toaster that shows toasts with an action beside them. */
+const actionToaster = "trellis-actions";
 /**
  * A host refusal for an ungranted capability. It crosses the App's RPC as a
  * plain Error carrying the host AppError's own `code`, never as an AppError.
@@ -272,6 +279,17 @@ export function WorkflowWorkspace({
     },
     [notify],
   );
+  /** One action beside a toast ("Allow"): the host's toast takes only words. */
+  const offer = useCallback((message: string, action: ToastAction) => {
+    const id = toast.error(message, {
+      toasterId: actionToaster,
+      closeButton: true,
+      action: { label: action.label, onClick: action.onSelect },
+    });
+    return () => {
+      toast.dismiss(id);
+    };
+  }, []);
   const create = useCallback(() => {
     go({ scope: { kind: "new" }, selectedRun: null });
   }, [go]);
@@ -427,6 +445,7 @@ export function WorkflowWorkspace({
   });
   return (
     <>
+      <Toaster id={actionToaster} />
       {browserActions ? (
         <PortableShare
           key={workflowId ?? "import"}
@@ -559,6 +578,14 @@ export function WorkflowWorkspace({
             }}
             permissions={permissions}
             notify={fail}
+            offer={offer}
+            onClose={
+              building === null
+                ? () => {
+                    setAskOpen(false);
+                  }
+                : undefined
+            }
           />
         ) : null}
         {store && editorWorkflowId ? (
@@ -591,6 +618,7 @@ export function WorkflowWorkspace({
           key={scope.kind}
           client={client}
           permissions={permissions}
+          offer={offer}
           onCreated={(id, kind: StartKind | null, started) => {
             choose(id, kind === "event" ? "triggers" : "canvas");
             if (started) {

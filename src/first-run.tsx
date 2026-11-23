@@ -12,7 +12,11 @@ import {
   type DraftStore,
 } from "./editor/draft-store.js";
 import { rowDraftStore } from "./editor/row-draft-store.js";
-import { AskAgent, type AskTarget } from "./agent/ask-agent.js";
+import {
+  AskAgent,
+  type AskTarget,
+  type ToastAction,
+} from "./agent/ask-agent.js";
 import type { WorkflowClient } from "./workflow-client.js";
 
 const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
@@ -97,6 +101,7 @@ export function FirstRun({
   onCreated,
   onTemplates,
   onFail,
+  offer,
 }: {
   client: WorkflowClient;
   permissions?: Pick<HostUi, "requestAppPermissions"> | undefined;
@@ -111,6 +116,8 @@ export function FirstRun({
   ) => void;
   onTemplates: () => void;
   onFail: (message: string) => void;
+  /** A toast with one action beside it. */
+  offer?: (message: string, action: ToastAction) => () => void;
 }) {
   const pending = useRef<StartKind | null>(null);
   const [asking, setAsking] = useState(false);
@@ -168,40 +175,9 @@ export function FirstRun({
           <Sigil name="trellis" size={16} />
           Start
         </h2>
-        <p className="wf-muted">What starts this workflow?</p>
-        {choices.map(({ kind, label }) => (
-          <Button
-            key={kind}
-            variant="outline"
-            onClick={() => {
-              pending.current = kind;
-              // The editor reports its own failed save; a Start choice toasts it.
-              create(startDraft(kind, zone)).then(
-                undefined,
-                (cause: unknown) => {
-                  onFail(
-                    cause instanceof Error
-                      ? cause.message
-                      : "The workflow could not be saved.",
-                  );
-                },
-              );
-            }}
-          >
-            {label}
-          </Button>
-        ))}
-        <Button
-          variant="outline"
-          aria-expanded={asking}
-          onClick={() => {
-            setAsking((open) => !open);
-          }}
-        >
-          Describe it to an Agent
-        </Button>
         {asking ? (
           <AskAgent
+            inline
             client={client}
             workflowId={null}
             prepare={() => makeDraft(startDraft("hand", zone))}
@@ -209,15 +185,52 @@ export function FirstRun({
             onBuilding={(target, id) => {
               if (target !== null) onCreated(id, null, target);
             }}
+            onClose={() => {
+              setAsking(false);
+            }}
             permissions={permissions}
             notify={onFail}
-            titled={false}
+            offer={offer}
           />
-        ) : null}
-        <Button variant="ghost" onClick={onTemplates}>
-          Start from a template
-        </Button>
-        <p className="wf-muted">Or press Tab to add a step.</p>
+        ) : (
+          <>
+            <p className="wf-muted">What starts this workflow?</p>
+            {choices.map(({ kind, label }) => (
+              <Button
+                key={kind}
+                variant="outline"
+                onClick={() => {
+                  pending.current = kind;
+                  // The editor reports its own failed save; a Start choice toasts it.
+                  create(startDraft(kind, zone)).then(
+                    undefined,
+                    (cause: unknown) => {
+                      onFail(
+                        cause instanceof Error
+                          ? cause.message
+                          : "The workflow could not be saved.",
+                      );
+                    },
+                  );
+                }}
+              >
+                {label}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAsking(true);
+              }}
+            >
+              Describe it to an Agent
+            </Button>
+            <Button variant="ghost" onClick={onTemplates}>
+              Start from a template
+            </Button>
+            <p className="wf-muted">Or press Tab to add a step.</p>
+          </>
+        )}
       </section>
     </div>
   );

@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.29.0
+
+### Minor Changes
+
+- Changes since 0.28.8:
+
+  - fix(trellis): say why Allow sent nothing when the request cannot be built
+  - fix(trellis): retain Ask request identity across permission retries
+  - fix(trellis): serialize Allow and Send using current request
+  - fix(trellis): reuse the prepared draft when allowing a request
+  - feat(trellis): let the person allow messaging chats from the refusal and
+    close the Ask panel
+
 ## 0.28.8
 
 ### Patch Changes

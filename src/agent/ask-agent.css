@@ -45,3 +45,22 @@
   block-size: 1.5rem;
   min-block-size: 0;
 }
+.wf-ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  min-height: 1.5rem;
+}
+.wf-ask-head p {
+  margin: 0;
+}
+/* In the first-run card the panel is plain content: the card's own surface,
+   gap and quiet caption, with no box of its own. */
+.wf-ask-inline {
+  display: grid;
+  gap: var(--spacing-xs);
+  padding: 0;
+  border: 0;
+  background: none;
+}

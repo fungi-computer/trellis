@@ -446,8 +446,7 @@ body,
 .wf-editor-host > .wf-ask {
   flex: none;
 }
-.wf-first-start .wf-ask {
-  padding: 0;
+.wf-first-start .wf-ask-inline {
   max-height: 60vh;
   overflow: auto;
 }

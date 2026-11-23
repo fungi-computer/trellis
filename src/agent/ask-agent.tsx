@@ -2,26 +2,26 @@ import "./ask-agent.css";
 import { useEffect, useRef, useState } from "react";
 import * as z from "zod";
 import type { HostUi } from "@fungi.computer/agar";
-import { defineIdFamily } from "@fungi.computer/cairn/id";
+import { X } from "lucide-react";
 import { Button } from "@fungi.computer/caps/components/button";
+import { IconButton } from "@fungi.computer/caps/components/icon-button";
 import { Field } from "@fungi.computer/caps/components/field";
-import { Loader } from "@fungi.computer/caps/components/loader";
 import { Select } from "@fungi.computer/caps/components/select";
 import { Surface } from "@fungi.computer/caps/components/surface";
 import { Textarea } from "@fungi.computer/caps/components/textarea";
 import { Sigil } from "@fungi.computer/sigils";
 import type { WorkflowClient } from "../workflow-client.js";
+import { BuildingBar } from "./building-bar.js";
+import { newAskRequestId } from "./ask-request-id.js";
 
 const capabilityDenied = z.object({ code: z.literal("CAPABILITY_DENIED") });
 /** How often the count of the Agent's saves is read while it builds. */
 const POLL_MS = 2000;
 /** With saves made and none for this long, the Agent is taken to be done. */
 const QUIET_MS = 45_000;
-const askIds = defineIdFamily({
-  family: "trellis-ask-agent",
-  version: 1,
-  kinds: { request: { prefix: "ask" } },
-});
+
+/** The one action a toast offers. */
+export type ToastAction = Readonly<{ label: string; onSelect: () => void }>;
 
 /** The chat an Agent is asked in. */
 export type AskTarget = Readonly<{ agentId: string; sessionId: string }>;
@@ -50,7 +50,9 @@ export function AskAgent({
   onBuilding,
   permissions,
   notify,
-  titled = true,
+  offer,
+  onClose,
+  inline = false,
 }: {
   client: Pick<
     WorkflowClient,
@@ -64,8 +66,12 @@ export function AskAgent({
   onBuilding: (building: AskTarget | null, workflowId: string) => void;
   permissions?: Pick<HostUi, "requestAppPermissions"> | undefined;
   notify: (message: string) => void;
-  /** Show the panel's own heading; a host that introduces it already says no. */
-  titled?: boolean;
+  /** Tell the person something with one action beside it (a toast with a button). */
+  offer?: (message: string, action: ToastAction) => () => void;
+  /** Close the idle panel; absent while an Agent builds. */
+  onClose?: () => void;
+  /** Sit inside a card of its own host (the first run) instead of as a panel. */
+  inline?: boolean;
 }) {
   const [chats, setChats] = useState<readonly Chat[] | null>(null);
   const [agents, setAgents] = useState<
@@ -74,10 +80,14 @@ export function AskAgent({
   const [chosen, setChosen] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const offers = useRef(new Set<() => void>());
   const [saves, setSaves] = useState(0);
   // True once the Agent has saved and then gone quiet: Stop gives way to Done.
   const [quiet, setQuiet] = useState(false);
   const lastSave = useRef({ saves: 0, at: 0 });
+  // First-run retries reuse the draft saved before messaging was refused.
+  const preparedDraftId = useRef<string | null>(null);
   useEffect(() => {
     let active = true;
     void client.listChats().then(
@@ -161,6 +171,7 @@ export function AskAgent({
     target: AskTarget,
     draftId: string,
     intent: "build" | "stop",
+    requestId: string,
   ) {
     const request =
       intent === "build"
@@ -171,7 +182,7 @@ export function AskAgent({
         ...request,
         ...target,
         workflowId: draftId,
-        requestId: askIds.request.generate(),
+        requestId,
       });
     try {
       return await ask();
@@ -189,25 +200,88 @@ export function AskAgent({
       return await ask();
     }
   }
-  function refusal(reply: Awaited<ReturnType<WorkflowClient["askAgent"]>>) {
+  function refusal(
+    reply: Awaited<ReturnType<WorkflowClient["askAgent"]>>,
+  ): { message: string; allow: boolean } | null {
     if ("status" in reply) return null;
     if ("retryAfterMs" in reply)
-      return `Too many messages just now. Try again in ${String(Math.ceil(reply.retryAfterMs / 1000))} seconds.`;
+      return {
+        message: `Too many messages just now. Try again in ${String(Math.ceil(reply.retryAfterMs / 1000))} seconds.`,
+        allow: false,
+      };
     if (reply.error === "no_chat")
-      return "That chat is no longer there. Pick another.";
-    return "Trellis isn't allowed to message your chats. Approve it to continue.";
+      return {
+        message: "That chat is no longer there. Pick another.",
+        allow: false,
+      };
+    return {
+      message: "Trellis isn't allowed to message your chats.",
+      allow: true,
+    };
   }
-  async function build() {
-    if (!chat || text.trim() === "" || sending) return;
+  /** Invalidate saved toast callbacks as well as removing their visible offers. */
+  function dismissOffers() {
+    for (const dismiss of offers.current) dismiss();
+    offers.current.clear();
+  }
+  async function grantMessaging() {
+    if (!permissions)
+      throw new Error("This host can't ask for that permission from here.");
+    const outcome = await permissions.requestAppPermissions({
+      agents: ["agent.send"],
+    });
+    if (outcome === "declined")
+      throw new Error(
+        "Trellis needs your approval to send messages into your chats.",
+      );
+  }
+  /** A saved toast delegates to the current render's text and selected chat. */
+  async function allow(requestId: string) {
+    if (inFlight.current) return;
+    await latestBuild.current(true, requestId);
+  }
+  async function build(grant = false, retryRequestId?: string) {
+    if (inFlight.current) return;
+    dismissOffers();
+    const blocked =
+      building !== null
+        ? "A build is already running."
+        : !chat
+          ? "Pick a chat first."
+          : text.trim() === ""
+            ? "Type what it should build first."
+            : null;
+    if (blocked !== null || !chat) {
+      // Allow dismissed its offer; say why nothing was sent.
+      if (grant && blocked !== null) notify(blocked);
+      return;
+    }
+    inFlight.current = true;
     setSending(true);
     try {
-      const draftId = workflowId ?? (await prepare?.());
+      if (grant) await grantMessaging();
+      const draftId =
+        workflowId ?? preparedDraftId.current ?? (await prepare?.());
       if (draftId === undefined)
         throw new Error("There is no draft to build into.");
+      if (workflowId === null) preparedDraftId.current = draftId;
       const target = { agentId: chat.agentId, sessionId: chat.sessionId };
-      const reason = refusal(await send(target, draftId, "build"));
+      const requestId = retryRequestId ?? newAskRequestId();
+      const reason = refusal(await send(target, draftId, "build", requestId));
       if (reason !== null) {
-        notify(reason);
+        if (reason.allow && offer) {
+          let active = true;
+          const dismiss = offer(reason.message, {
+            label: "Allow",
+            onSelect: () => {
+              if (active) void allow(requestId);
+            },
+          });
+          offers.current.add(() => {
+            active = false;
+            dismiss();
+          });
+        } else notify(reason.message);
         return;
       }
       setSaves(0);
@@ -220,17 +294,23 @@ export function AskAgent({
           : "The request could not be sent.",
       );
     } finally {
+      inFlight.current = false;
       setSending(false);
     }
   }
+  const latestBuild = useRef(build);
+  latestBuild.current = build;
   async function stop() {
     if (building === null || workflowId === null) return;
     const target = building;
     // Polling ends first; then the Agent is told to stop.
     onBuilding(null, workflowId);
     try {
-      const reason = refusal(await send(target, workflowId, "stop"));
-      if (reason !== null) notify(`Couldn't tell the Agent to stop. ${reason}`);
+      const reason = refusal(
+        await send(target, workflowId, "stop", newAskRequestId()),
+      );
+      if (reason !== null)
+        notify(`Couldn't tell the Agent to stop. ${reason.message}`);
     } catch (cause) {
       console.error("The stop request could not be sent", cause);
       notify(
@@ -238,41 +318,37 @@ export function AskAgent({
       );
     }
   }
-  return (
-    <Surface
-      role="region"
-      aria-label="Ask an Agent"
-      placement="embedded"
-      size="sm"
-      className={building === null ? "wf-ask" : "wf-ask wf-ask-bar"}
-    >
-      {titled && building === null ? (
-        <h2>
-          <Sigil name="trellis" size={16} />
-          Ask an Agent to build it
-        </h2>
+  const content = (
+    <>
+      {building === null ? (
+        <div className="wf-ask-head">
+          {inline ? (
+            <p className="wf-muted">Describe what it should build</p>
+          ) : (
+            <h2>
+              <Sigil name="trellis" size={16} />
+              Ask an Agent to build it
+            </h2>
+          )}
+          {onClose ? (
+            <IconButton
+              aria-label="Close"
+              icon={<X aria-hidden="true" />}
+              onClick={onClose}
+            />
+          ) : null}
+        </div>
       ) : null}
       {building !== null ? (
-        <p className="wf-ask-building" role="status">
-          {quiet ? null : <Loader decorative size="sm" />}
-          <strong>{`${who ?? "The Agent"} ${quiet ? "seems done" : "is building"}`}</strong>
-          <span className="wf-muted">
-            {saves === 0
-              ? "Waiting for its first save"
-              : `${String(saves)} ${saves === 1 ? "save" : "saves"}${quiet ? "" : " so far"}`}
-          </span>
-          <Button
-            className="wf-ask-end"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (quiet && workflowId !== null) onBuilding(null, workflowId);
-              else void stop();
-            }}
-          >
-            {quiet ? "Done" : "Stop"}
-          </Button>
-        </p>
+        <BuildingBar
+          who={who ?? "The Agent"}
+          saves={saves}
+          quiet={quiet}
+          onEnd={() => {
+            if (quiet && workflowId !== null) onBuilding(null, workflowId);
+            else void stop();
+          }}
+        />
       ) : chats === null ? (
         <p className="wf-muted">Finding your chats…</p>
       ) : chats.length === 0 ? (
@@ -333,6 +409,21 @@ export function AskAgent({
           </span>
         </>
       )}
+    </>
+  );
+  return inline ? (
+    <section aria-label="Ask an Agent" className="wf-ask wf-ask-inline">
+      {content}
+    </section>
+  ) : (
+    <Surface
+      role="region"
+      aria-label="Ask an Agent"
+      placement="embedded"
+      size="sm"
+      className={building === null ? "wf-ask" : "wf-ask wf-ask-bar"}
+    >
+      {content}
     </Surface>
   );
 }
