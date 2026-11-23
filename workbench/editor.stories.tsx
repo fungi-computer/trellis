@@ -1,3 +1,4 @@
+import { Toaster, toast } from "@fungi.computer/caps/components/toaster";
 import { savedDraftFixture } from "./draft-store.fixture.js";
 import type { Json } from "@fungi.computer/braid";
 import { ValueField } from "../src/editor/value-field.js";
@@ -109,6 +110,34 @@ function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
           active
         />
       </ChromeFrame>
+    </>
+  );
+}
+/** The note bar at the top of the editor; a toast opens below it. */
+export function ToastClearance() {
+  const [store] = useState(() =>
+    memoryDraftStore(emptyDraft(), fixtureCatalog, {
+      Prints: { displayName: "Prints", icon: "prints" },
+    }),
+  );
+  return (
+    <>
+      <ChromeFrame headerless>
+        <WorkflowEditor store={store} runPanel={() => <p>Run form</p>} active />
+      </ChromeFrame>
+      <Toaster id="trellis-proof" />
+      <button
+        type="button"
+        style={{ position: "fixed", insetInlineEnd: 0, insetBlockEnd: 0 }}
+        onClick={() => {
+          toast("Run started", {
+            toasterId: "trellis-proof",
+            duration: Infinity,
+          });
+        }}
+      >
+        Show notice
+      </button>
     </>
   );
 }

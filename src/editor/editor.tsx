@@ -1,3 +1,4 @@
+import { useAppHeaderRef } from "@fungi.computer/caps/components/app-header";
 import { describeAppError } from "@fungi.computer/agar/errors";
 import { FieldSet } from "@fungi.computer/caps/components/field";
 import { Button } from "@fungi.computer/caps/components/button";
@@ -101,6 +102,7 @@ function Editor({
   agentNames,
   asking = false,
 }: WorkflowEditorProps) {
+  const headerRef = useAppHeaderRef();
   const state = useDraft(store);
   // An undo that fails says why in one toast; without a host it stays a line.
   const { restoreError } = state;
@@ -526,7 +528,7 @@ function Editor({
       <CatalogLoadingProvider value={state.catalogLoading}>
         <ChromeSlot active={active} parts={chromeParts} />
         {notes ? (
-          <header className="wf-bar">
+          <header className="wf-bar" ref={headerRef}>
             {state.catalogError !== null ? (
               <p role="alert" className="wf-bar-note">
                 App catalog could not be loaded. Your draft is still available.

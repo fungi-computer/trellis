@@ -1,3 +1,4 @@
+import { toast } from "@fungi.computer/caps/components/toaster";
 import { WorkflowWorkspace } from "../src/workspace.js";
 import { createHomeFixture } from "../test/workflows-home.fixture.js";
 import { ChromeFrame } from "./chrome-frame.js";
@@ -10,9 +11,10 @@ export default { title: "Trellis workflows home" };
 const frame = (
   client: ReturnType<typeof createHomeFixture>["client"],
   scope: "all-workflows" | "templates",
+  pinned = false,
 ) => (
   <div className="trellis">
-    <ChromeFrame>
+    <ChromeFrame pinned={pinned}>
       <WorkflowWorkspace client={client} initialScope={{ kind: scope }} />
     </ChromeFrame>
   </div>
@@ -29,3 +31,22 @@ export const FirstRunCanvas = () =>
 /** Templates, each drawn as a read-only mini canvas (17). */
 export const TemplateGrid = () =>
   frame(createHomeFixture().client, "templates");
+
+/** A toast from the workspace opens below a maximised window header. */
+export const ToastClearance = () => (
+  <>
+    {frame(createHomeFixture().client, "all-workflows", true)}
+    <button
+      type="button"
+      style={{ position: "fixed", insetInlineStart: 0, insetBlockEnd: 0 }}
+      onClick={() => {
+        toast.error("The run could not start: the Computer is offline.", {
+          toasterId: "trellis-actions",
+          duration: Infinity,
+        });
+      }}
+    >
+      Show notice
+    </button>
+  </>
+);

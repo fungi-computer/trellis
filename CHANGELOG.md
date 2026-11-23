@@ -1,5 +1,18 @@
 # @fungi.computer/trellis
 
+## 0.29.5
+
+### Patch Changes
+
+- Changes since 0.29.4:
+
+  - fix(caps): count a header within 8px of the top for toast clearance
+  - fix(caps): register app headers for toast clearance
+  - fix(caps): measure the app header for toast clearance
+
+- Updated dependencies
+  - @fungi.computer/caps@0.14.1
+
 ## 0.29.4
 
 ### Patch Changes
