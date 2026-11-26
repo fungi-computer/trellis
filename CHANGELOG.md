@@ -1,5 +1,12 @@
 # @fungi.computer/trellis
 
+## 0.29.17
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/shiitake-extensions@0.13.18
+
 ## 0.29.16
 
 ### Patch Changes
