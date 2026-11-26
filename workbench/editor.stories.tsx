@@ -2,7 +2,7 @@ import { Toaster, toast } from "@fungi.computer/caps/components/toaster";
 import { savedDraftFixture } from "./draft-store.fixture.js";
 import type { Json } from "@fungi.computer/braid";
 import { ValueField } from "../src/editor/value-field.js";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as S from "effect/Schema";
 import { catalogSchema, workflowDefinitionSchema } from "@fungi.computer/braid";
 import type { ToastAction } from "../src/agent/ask-agent.js";
@@ -80,9 +80,46 @@ const encodedDefinition = S.encodeSync(workflowDefinitionSchema)(
   fixtureDraft.definition,
 );
 
-function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
+/** What the catalog read answers until Retry: nothing wrong, a broken Hub, or a refused grant. */
+type CatalogRefusal = "reachable" | "broken" | "denied";
+const refusals = {
+  broken: () => new Error("Catalog 502 fixture"),
+  denied: () =>
+    Object.assign(new Error("not granted"), { code: "CAPABILITY_DENIED" }),
+} as const;
+
+/** A published workflow has no "Publish a version" hint, so nothing else holds the page's top rows. */
+const publishedVersion = {
+  version: 1,
+  commit: "a".repeat(40),
+  committedAt: 1,
+  message: "Fixture publication",
+};
+
+function ContestDraft({
+  catalog,
+  published = false,
+}: {
+  catalog: CatalogRefusal;
+  published?: boolean;
+}) {
   // Only the person's own press of Retry catalog lets the Hub answer.
   const retried = useRef(false);
+  // The host's prompt, stable across renders so it can never replay the toast.
+  // The person declines the first time and approves the second; approving is
+  // what lets the Hub answer.
+  const asked = useRef(0);
+  const permissions = useMemo(
+    () => ({
+      requestAppPermissions: () => {
+        asked.current += 1;
+        if (asked.current === 1) return Promise.resolve("declined" as const);
+        retried.current = true;
+        return Promise.resolve("granted" as const);
+      },
+    }),
+    [],
+  );
   useEffect(() => {
     const press = (event: Event) => {
       if (
@@ -105,11 +142,12 @@ function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
             layout: fixtureDraft.layout,
             revision: 1,
           });
-        if (method === "listVersions") return Promise.resolve([]);
+        if (method === "listVersions")
+          return Promise.resolve(published ? [publishedVersion] : []);
         if (method === "catalog") {
           if (input === "{}") {
-            if (catalogFails && !retried.current)
-              return Promise.reject(new Error("Catalog 502 fixture"));
+            if (catalog !== "reachable" && !retried.current)
+              return Promise.reject(refusals[catalog]());
             return Promise.resolve({
               apps: Object.entries(encodedCatalog).map(([appId, app]) => ({
                 appId,
@@ -156,6 +194,7 @@ function ContestDraft({ catalogFails }: { catalogFails: boolean }) {
             store={store}
             runPanel={() => <p>Run form fixture</p>}
             offer={offer}
+            permissions={permissions}
             active
           />
         </ChromeFrame>
@@ -208,5 +247,11 @@ function offer(message: string, action: ToastAction) {
     toast.dismiss(id);
   };
 }
-export const UnpublishedDraft = () => <ContestDraft catalogFails={false} />;
-export const CatalogFailure = () => <ContestDraft catalogFails />;
+export const UnpublishedDraft = () => <ContestDraft catalog="reachable" />;
+export const CatalogFailure = () => <ContestDraft catalog="broken" />;
+/** The catalog read is refused for lack of access: the toast says so, not "couldn't reach the Hub". */
+export const CatalogDenied = () => <ContestDraft catalog="denied" />;
+/** The same refusal on a published workflow: approving moves nothing on the page. */
+export const CatalogDeniedPublished = () => (
+  <ContestDraft catalog="denied" published />
+);

@@ -1,5 +1,9 @@
 import { useAppHeaderRef } from "@fungi.computer/caps/components/app-header";
-import { describeAppError } from "@fungi.computer/agar/errors";
+import {
+  describeAppError,
+  typedFailureMessage,
+} from "@fungi.computer/agar/errors";
+import type { HostUi } from "@fungi.computer/agar";
 import { FieldSet } from "@fungi.computer/caps/components/field";
 import { Button } from "@fungi.computer/caps/components/button";
 import { Surface } from "@fungi.computer/caps/components/surface";
@@ -12,6 +16,7 @@ import {
   useId,
   useMemo,
   useRef,
+  useCallback,
   useState,
   type ReactNode,
 } from "react";
@@ -70,6 +75,8 @@ export type WorkflowEditorProps = {
   readMedia?: ReadMedia;
   /** Tells the person something went wrong, once, as a toast. */
   notify?: (message: string) => void;
+  /** The host's permission prompt; without it a missing access can only be named, not granted. */
+  permissions?: Pick<HostUi, "requestAppPermissions">;
   /** A toast that stays with one action beside it; the returned call clears it. */
   offer?: (message: string, action: ToastAction) => () => void;
   /** Agent names by id, so a change reads "Added by Moss", not "Added". */
@@ -104,6 +111,7 @@ function Editor({
   readMedia,
   notify,
   offer,
+  permissions,
   agentNames,
   asking = false,
 }: WorkflowEditorProps) {
@@ -119,19 +127,60 @@ function Editor({
   const { catalogError } = state;
   const refreshCatalog = useRef(state.refreshCatalog);
   refreshCatalog.current = state.refreshCatalog;
+  const needsAccess = catalogError?.kind === "denied";
+  // One approval for the toast and the header command: a request that is
+  // already open is never opened twice, and the toast closes once the header
+  // asks, so only one surface offers the action at a time.
+  const permissionOpen = useRef(false);
+  const [approving, setApproving] = useState(false);
+  const dismissOffer = useRef<(() => void) | null>(null);
+  const hostRef = useRef({ permissions, notify });
+  hostRef.current = { permissions, notify };
+  const approveAccess = useCallback(() => {
+    const { permissions: host, notify: tell } = hostRef.current;
+    if (!host || permissionOpen.current) return;
+    permissionOpen.current = true;
+    setApproving(true);
+    dismissOffer.current?.();
+    host
+      .requestAppPermissions({ workflows: ["workflow.run"] })
+      .then((outcome) => {
+        if (outcome !== "declined") refreshCatalog.current();
+      })
+      .catch((cause: unknown) => {
+        tell?.(
+          typedFailureMessage("App permissions could not be opened", cause),
+        );
+      })
+      .finally(() => {
+        permissionOpen.current = false;
+        setApproving(false);
+      });
+  }, []);
+  const canApproveAccess = needsAccess && permissions !== undefined;
   useEffect(() => {
     if (catalogError === null || !offer) return undefined;
-    return offer(
-      `App catalog could not be loaded: ${loadCauseWords(catalogError)} Your draft is still available.`,
-      {
-        label: "Retry catalog",
-        onSelect: () => {
-          refreshCatalog.current();
-        },
-        persistent: true,
-      },
-    );
-  }, [catalogError, offer]);
+    const message = `App catalog could not be loaded: ${loadCauseWords(catalogError)} Your draft is still available.`;
+    // Missing access is fixed by granting it; every other cause only retries.
+    const clear = canApproveAccess
+      ? offer(message, {
+          label: "Approve access",
+          onSelect: approveAccess,
+          persistent: true,
+        })
+      : offer(message, {
+          label: "Retry catalog",
+          onSelect: () => {
+            refreshCatalog.current();
+          },
+          persistent: true,
+        });
+    dismissOffer.current = clear;
+    return () => {
+      dismissOffer.current = null;
+      clear();
+    };
+  }, [approveAccess, canApproveAccess, catalogError, offer]);
   const test = useTestRun({
     target: testTarget,
     definition: state.document?.draft.definition,
@@ -508,6 +557,8 @@ function Editor({
         canRestore: store.restore !== undefined,
         testable: test.available,
         testStarting: test.phase === "starting",
+        canApproveAccess,
+        approvingAccess: approving,
       },
       {
         run: () => {
@@ -524,6 +575,7 @@ function Editor({
           test.testWorkflow();
         },
         publish,
+        approveAccess,
       },
     ),
   };

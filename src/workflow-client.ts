@@ -36,8 +36,14 @@ import {
 } from "../shared/ask-agent.js";
 import type { createWorkflowShare } from "../backend/share.js";
 import type { Draft } from "./editor/draft-store.js";
-import { LoadFailure } from "./editor/load-cause.js";
+import { LoadFailure, type LoadCause } from "./editor/load-cause.js";
 import { runStatusSchema } from "./runs/run-state.js";
+
+/** Access never granted, or granted and since changed: both are missing access. */
+const deniedRefusal = S.Struct({
+  code: S.Literals(["CAPABILITY_DENIED", "CAPABILITY_REVOKED"]),
+});
+const isDeniedRefusal = S.is(deniedRefusal);
 
 /**
  * Run a read whose failure the editor explains to the person: a refused or
@@ -51,12 +57,12 @@ async function reading<T>(
     return await run();
   } catch (cause) {
     if (cause instanceof LoadFailure) throw cause;
-    throw new LoadFailure(
-      cause instanceof z.ZodError
-        ? { kind: "decode", subject }
-        : { kind: "transport" },
-      { cause },
-    );
+    // A refusal keeps its code across a Durable Object RPC as a plain Error,
+    // so it is read by its code, never its class or words.
+    let load: LoadCause = { kind: "transport" };
+    if (cause instanceof z.ZodError) load = { kind: "decode", subject };
+    else if (isDeniedRefusal(cause)) load = { kind: "denied" };
+    throw new LoadFailure(load, { cause });
   }
 }
 function decodeCatalog(input: unknown) {

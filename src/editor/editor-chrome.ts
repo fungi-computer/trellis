@@ -37,6 +37,10 @@ export type EditorChromeState = Readonly<{
   testable: boolean;
   /** A test is starting. */
   testStarting: boolean;
+  /** The Apps cannot be read for lack of access, and the host can ask for it. */
+  canApproveAccess: boolean;
+  /** The host's permission prompt is open. */
+  approvingAccess: boolean;
 }>;
 
 export type EditorChromeActions = Readonly<{
@@ -44,6 +48,7 @@ export type EditorChromeActions = Readonly<{
   restore: () => void;
   testWorkflow: () => void;
   publish: (runAfter: boolean) => void;
+  approveAccess: () => void;
 }>;
 
 /** Words for how the draft stands against what is saved. */
@@ -87,6 +92,19 @@ export function editorChrome(
   const readOnly = state.version !== undefined;
   const blocked = publishBlocked(state);
   const commands: ChromeCommand[] = [
+    // Beside the "Apps unavailable" status: a fixed header row, so granting
+    // access moves nothing on the page.
+    ...(state.canApproveAccess
+      ? [
+          {
+            id: "approve-access",
+            label: "Approve access",
+            variant: "outline" as const,
+            disabled: state.approvingAccess,
+            run: actions.approveAccess,
+          },
+        ]
+      : []),
     ...(state.hasRunPanel
       ? [
           {
@@ -185,8 +203,12 @@ export function editorChrome(
   const saved = savedWords(state);
   const problems = problemWords(state);
   return {
-    primary: commands.filter((command) => command.id === primaryId),
-    menu: commands.filter((command) => command.id !== primaryId),
+    primary: commands.filter(
+      (command) => command.id === primaryId || command.id === "approve-access",
+    ),
+    menu: commands.filter(
+      (command) => command.id !== primaryId && command.id !== "approve-access",
+    ),
     status: [
       {
         id: "saved",

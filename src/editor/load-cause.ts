@@ -14,6 +14,7 @@ const loadCauseSchema = S.Union([
     subject: S.Literals(["catalog", "workflow"]),
   }),
   S.Struct({ kind: S.Literal("transport") }),
+  S.Struct({ kind: S.Literal("denied") }),
   S.Struct({ kind: S.Literal("rebuilding") }),
   S.Struct({
     kind: S.Literal("not-found"),
@@ -59,6 +60,8 @@ export function loadCauseWords(cause: LoadCause): string {
         : "the Hub's reply didn't match what Trellis expects.";
     case "transport":
       return "couldn't reach the Hub.";
+    case "denied":
+      return "Trellis doesn't have the access it needs.";
     case "rebuilding":
       return "the Hub is still rebuilding this workflow's copies; try again shortly.";
     case "not-found":

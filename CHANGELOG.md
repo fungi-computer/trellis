@@ -1,5 +1,22 @@
 # @fungi.computer/trellis
 
+## 0.30.0
+
+### Minor Changes
+
+- Changes since 0.29.22:
+
+  - fix(trellis): put Approve access in the header and ask only once
+  - feat(trellis): keep a way back to Approve access after declining
+  - fix(trellis): keep the failure of the approval prompt in its toast
+  - fix(trellis): offer Approve access for a missing or revoked grant
+  - fix(trellis): say access is missing when the catalog read is refused
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/caps@0.14.4
+
 ## 0.29.22
 
 ### Patch Changes

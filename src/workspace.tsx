@@ -597,6 +597,7 @@ export function WorkflowWorkspace({
             test={{ client, workflowId: editorWorkflowId }}
             notify={fail}
             offer={offer}
+            {...(permissions ? { permissions } : {})}
             agentNames={agentNames}
             asking={askOpen || building !== null}
             {...(readMedia ? { readMedia } : {})}
