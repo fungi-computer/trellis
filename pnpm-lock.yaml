@@ -42,8 +42,8 @@ importers:
         specifier: 0.16.0
         version: 0.16.0
       '@fungi.computer/shiitake-extensions':
-        specifier: 0.13.16
-        version: 0.13.16(@aws-sdk/credential-provider-node@3.972.99)(@opentui/keymap@0.5.10(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.4(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(debug@4.4.3)(hono@4.13.22)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.1)(web-tree-sitter@0.25.10)(ws@8.23.0)
+        specifier: 0.13.17
+        version: 0.13.17(@aws-sdk/credential-provider-node@3.972.99)(@opentui/keymap@0.5.10(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.4(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(debug@4.4.3)(hono@4.13.22)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.1)(web-tree-sitter@0.25.10)(ws@8.23.0)
       '@fungi.computer/sigils':
         specifier: 0.3.2
         version: 0.3.2(react@18.3.1)
@@ -886,8 +886,8 @@ packages:
   '@fungi.computer/seam@0.2.9':
     resolution: {integrity: sha512-F9qKolH2pzS5M2TKEpYF5sUTl+YVG2P9uRTol1TqGGnZ1iVjZDPc7DgsFxzJjqrXCuxEYgHmL3CBBMTAPCo7dw==}
 
-  '@fungi.computer/shiitake-extensions@0.13.16':
-    resolution: {integrity: sha512-jFEJAPib3p+y+VmlrOQMX+3DixH78A37hGQgHmngwG8sF2VUn7VBFB87rI6N4fs50Mu2KyF5uxQWO2TU/M19YA==}
+  '@fungi.computer/shiitake-extensions@0.13.17':
+    resolution: {integrity: sha512-qdPqwBO9C8y2y6xPnruzejcXeO1nWIDRgQDPp3MgZn412DksbE2coO3krL/FkGeN+StwJLQCM0EdQXPRm7jQHg==}
 
   '@fungi.computer/shiitake@0.23.6':
     resolution: {integrity: sha512-RoKRrCLOs7Dxyh4UPL/p53LkUL88LNXWgEd4UgGFESncfIfsKOsL8cmcIRBp8FMTNTlvRbOLT63D1BD1SghhLg==}
@@ -5526,7 +5526,7 @@ snapshots:
     transitivePeerDependencies:
       - pg-native
 
-  '@fungi.computer/shiitake-extensions@0.13.16(@aws-sdk/credential-provider-node@3.972.99)(@opentui/keymap@0.5.10(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.4(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(debug@4.4.3)(hono@4.13.22)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.1)(web-tree-sitter@0.25.10)(ws@8.23.0)':
+  '@fungi.computer/shiitake-extensions@0.13.17(@aws-sdk/credential-provider-node@3.972.99)(@opentui/keymap@0.5.10(react@18.3.1)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@smithy/signature-v4@5.7.5)(@tanstack/react-query@5.108.4(@types/react@18.3.3)(react@18.3.1))(@types/json-schema@7.0.15)(debug@4.4.3)(hono@4.13.22)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(undici@8.13.1)(web-tree-sitter@0.25.10)(ws@8.23.0)':
     dependencies:
       '@fungi.computer/almanac': 0.2.1
       '@fungi.computer/cairn': 0.1.1
