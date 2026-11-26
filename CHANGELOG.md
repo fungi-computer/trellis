@@ -1,5 +1,14 @@
 # @fungi.computer/trellis
 
+## 0.29.15
+
+### Patch Changes
+
+- Updated dependencies
+  - @fungi.computer/shiitake-extensions@0.13.16
+  - @fungi.computer/braid@0.6.24
+  - @fungi.computer/workflows-wire@0.7.25
+
 ## 0.29.14
 
 ### Patch Changes
